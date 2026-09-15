@@ -1,0 +1,10 @@
+{
+  "liveServer.settings": {
+    "root": "/",
+    "port": 5500,
+    "host": "127.0.0.1"
+  },
+  "files.autoSave": "onFocusChange",
+  "editor.tabSize": 2,
+  "editor.wordWrap": "on"
+}
