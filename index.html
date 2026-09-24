@@ -23,6 +23,9 @@
     <button class="rail-btn" data-view="kanban"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><rect x="3" y="4" width="5.2" height="16" rx="1.6"/><rect x="9.4" y="4" width="5.2" height="10" rx="1.6"/><rect x="15.8" y="4" width="5.2" height="13" rx="1.6"/></svg><span class="tip">Conexões · Kanban</span></button>
     <button class="rail-btn" data-view="calendar"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><rect x="3" y="5" width="18" height="16" rx="2.5"/><path d="M8 3v4M16 3v4M3 10h18"/></svg><span class="tip">Calendário</span></button>
     <button class="rail-btn" data-view="ai"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9L12 3z"/><path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8L19 15z"/></svg><span class="tip">Aurora IA</span></button>
+    <button class="rail-btn" data-view="integrations" aria-label="Integrações"><span class="rail-emoji">↔</span><span class="tip">Integrações</span></button>
+    <button class="rail-btn" data-view="organization" aria-label="Organização"><span class="rail-emoji">⌘</span><span class="tip">Organização</span></button>
+    <button class="rail-btn" data-view="admin" aria-label="Administração"><span class="rail-emoji">⚙</span><span class="tip">Administração</span></button>
     <div class="rail-spacer"></div>
     <button class="rail-btn" id="settingsBtn"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg><span class="tip">Configurações</span></button>
     <div class="rail-user" id="railUser" title="Marina Duarte · online">MD<i></i></div>
@@ -231,6 +234,38 @@
       </div>
     </section>
 
+    <section class="view" id="view-integrations">
+      <header class="view-head"><div><p class="crumb">Canais e automações</p><h1>Integrações</h1></div><div class="head-actions"><span class="integ-state" id="metaState">Não conectado</span></div></header>
+      <div class="manage-wrap">
+        <div class="card meta-hero"><div class="meta-logo">∞</div><div><h3>WhatsApp Business Platform</h3><p>Conecte o App da Meta à sua conta WhatsApp Business administrada pelo Business Manager.</p></div><span class="secure-label">Credenciais protegidas no backend</span></div>
+        <div class="manage-grid">
+          <div class="card"><h3>Configuração do App Meta</h3><p class="form-help">Informe os identificadores do seu App e da sua BM. Tokens e App Secret nunca são gravados nesta versão estática.</p>
+            <div class="form-grid"><label>Meta App ID<input class="inp" id="metaAppId" placeholder="Ex.: 123456789012345"></label><label>Business Manager ID<input class="inp" id="metaBusinessId" placeholder="ID da sua BM"></label><label>WhatsApp Phone Number ID<input class="inp" id="metaPhoneId" placeholder="ID do número conectado"></label><label>WABA ID<input class="inp" id="metaWabaId" placeholder="WhatsApp Business Account ID"></label></div>
+            <label>Token de acesso temporário<input class="inp" id="metaAccessToken" type="password" autocomplete="off" placeholder="Cole apenas para validar no backend"></label>
+            <label>App Secret<input class="inp" id="metaAppSecret" type="password" autocomplete="off" placeholder="Nunca será salvo no navegador"></label>
+            <div class="form-actions"><button class="btn" id="saveMetaConfig">Salvar identificadores</button><button class="btn ghost" id="testMetaConfig">Validar configuração</button></div>
+          </div>
+          <div class="card"><h3>Checklist de conexão</h3><ol class="checklist"><li><span>1</span>Crie um App do tipo <b>Business</b> no Meta for Developers.</li><li><span>2</span>Adicione o produto <b>WhatsApp</b> e vincule a Business Manager.</li><li><span>3</span>Cadastre um número, copie o Phone Number ID e o WABA ID.</li><li><span>4</span>Configure no backend o webhook para mensagens e status.</li></ol><div class="webhook-box"><small>URL do webhook (quando houver backend)</small><code id="webhookUrl">/api/meta/webhook</code></div><a class="btn ghost external-btn" href="https://developers.facebook.com/apps/" target="_blank" rel="noreferrer">Abrir Meta for Developers ↗</a></div>
+        </div>
+        <div class="notice">⚠️ GitHub Pages é estático: ele não pode guardar App Secret nem receber webhooks da Meta. Para conectar de verdade, use um backend com variáveis de ambiente e HTTPS.</div>
+      </div>
+    </section>
+
+    <section class="view" id="view-organization">
+      <header class="view-head"><div><p class="crumb">Estrutura interna</p><h1>Organização</h1></div><div class="head-actions"><div class="chip-clock"><b id="orgMemberCount">0</b> colaboradores</div></div></header>
+      <div class="manage-wrap org-layout"><div class="card"><h3>Setores</h3><div id="departmentList" class="department-list"></div></div><div class="card"><h3>Colaboradores</h3><div id="memberList" class="member-list"></div></div></div>
+    </section>
+
+    <section class="view" id="view-admin">
+      <header class="view-head"><div><p class="crumb">Controle da empresa</p><h1>Administração</h1></div><div class="head-actions"><span class="secure-label">Dados salvos neste navegador</span></div></header>
+      <div class="manage-wrap admin-grid">
+        <div class="card"><h3>Novo setor</h3><form id="departmentForm" class="compact-form"><input class="inp" id="departmentName" required placeholder="Ex.: Sucesso do Cliente"><button class="btn">Adicionar setor</button></form><div id="adminDepartmentList" class="mini-list"></div></div>
+        <div class="card"><h3>Novo colaborador</h3><form id="memberForm" class="form-grid"><label>Nome<input class="inp" id="memberName" required placeholder="Nome completo"></label><label>E-mail<input class="inp" id="memberEmail" type="email" required placeholder="nome@empresa.com"></label><label>Setor<select class="inp" id="memberDepartment"></select></label><label>Privilégio<select class="inp" id="memberRole"></select></label><button class="btn">Cadastrar colaborador</button></form></div>
+        <div class="card"><h3>Privilégios</h3><div id="roleList" class="role-list"></div><form id="roleForm" class="compact-form"><input class="inp" id="roleName" required placeholder="Novo privilégio"><button class="btn ghost">Adicionar</button></form></div>
+        <div class="card"><h3>Tags de clientes</h3><p class="form-help">Use tags para segmentar clientes e automatizações.</p><div id="adminTagList" class="tagbox"></div><form id="tagForm" class="compact-form"><input class="inp" id="adminTagName" required placeholder="Ex.: cliente VIP"><button class="btn ghost">Adicionar</button></form></div>
+      </div>
+    </section>
+
   </main>
 </div>
 
@@ -260,6 +295,7 @@
 <script src="js/data.js"></script>
 <script src="js/storage.js"></script>
 <script src="js/ai.js"></script>
+<script src="js/management.js"></script>
 <script src="js/app.js"></script>
 </body>
 </html>

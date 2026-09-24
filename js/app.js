@@ -13,6 +13,7 @@ function switchView(v){
  if(v==='kanban')renderKanban();
  if(v==='calendar')renderCalendar();
  if(v==='contacts')renderContacts();
+ if(v==='integrations'||v==='organization'||v==='admin')renderManagement();
 }
 $$('.rail-btn[data-view]').forEach(b=>b.onclick=()=>switchView(b.dataset.view));
 $('#settingsBtn').onclick=()=>{
