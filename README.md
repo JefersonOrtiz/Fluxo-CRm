@@ -17,6 +17,53 @@ A URL final será `https://SEU-USUARIO.github.io/NOME-DO-REPOSITORIO/`.
 
 O projeto também possui um servidor Node.js e SQLite para uso local. Ele não é executado pelo GitHub Pages.
 
+## Ambiente local de produção — etapa 1
+
+Esta etapa adiciona uma API Node.js, PostgreSQL, autenticação, organizações, setores, colaboradores, privilégios, tags e uma base segura para a integração da Meta.
+
+### Requisitos
+
+- Docker Desktop com Docker Compose (recomendado para executar todos os serviços).
+- Node.js 24 ou superior, caso queira desenvolver somente a API.
+
+### Iniciar tudo com Docker
+
+```powershell
+docker compose up --build
+```
+
+- CRM: `http://localhost:8080`
+- API: `http://localhost:3001/api/health`
+- PostgreSQL: acessível apenas entre os containers.
+
+Na primeira vez, crie a organização e a conta administradora pela API:
+
+```powershell
+Invoke-RestMethod http://localhost:3001/api/auth/bootstrap -Method Post -ContentType 'application/json' -Body '{"organizationName":"Minha empresa","name":"Administrador","email":"admin@empresa.com","password":"uma-senha-com-8-caracteres"}'
+```
+
+### Executar só a API
+
+Copie `backend/.env.example` para `backend/.env`, preencha `DATABASE_URL` apontando para um PostgreSQL local e execute:
+
+```powershell
+Set-Location backend
+npm.cmd install
+npm.cmd run dev
+```
+
+### Endpoints incluídos
+
+- `POST /api/auth/bootstrap` — cria a primeira organização e administrador.
+- `POST /api/auth/login` e `GET /api/auth/me` — autenticação por token.
+- `GET/POST /api/departments` — setores.
+- `GET /api/members` — colaboradores.
+- `GET/POST /api/tags` — tags.
+- `GET/PUT /api/integrations/meta` — configura IDs e guarda tokens cifrados no backend.
+- `GET/POST /api/webhooks/meta` — endpoint preparado para validação e eventos da Meta.
+
+> Para produção, substitua todos os segredos de desenvolvimento por variáveis de ambiente fortes, use PostgreSQL gerenciado com backups e configure o webhook da Meta em um domínio HTTPS público. Não envie tokens, App Secret ou senhas ao repositório.
+
 ## Pré-requisito
 
 Node.js 22.5 ou superior (a instalação atual usa Node 24).

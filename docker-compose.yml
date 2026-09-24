@@ -1,0 +1,38 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: fluxo_crm
+      POSTGRES_USER: fluxo
+      POSTGRES_PASSWORD: fluxo_local
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./database/init.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U fluxo -d fluxo_crm"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+  api:
+    build: ./backend
+    environment:
+      PORT: 3001
+      DATABASE_URL: postgresql://fluxo:fluxo_local@postgres:5432/fluxo_crm
+      JWT_SECRET: desenvolvimento-troque-em-producao
+      CORS_ORIGIN: http://localhost:8080
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "3001:3001"
+  web:
+    image: nginx:1.27-alpine
+    volumes:
+      - ./:/usr/share/nginx/html:ro
+      - ./nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      - api
+    ports:
+      - "8080:80"
+volumes:
+  postgres_data:
