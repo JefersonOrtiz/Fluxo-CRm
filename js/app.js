@@ -15,7 +15,14 @@ function switchView(v){
  if(v==='contacts')renderContacts();
 }
 $$('.rail-btn[data-view]').forEach(b=>b.onclick=()=>switchView(b.dataset.view));
-$('#settingsBtn').onclick=()=>toast('⚙️','Configurações','Disponível na versão completa desta demo.','');
+$('#settingsBtn').onclick=()=>{
+ const current=getFluxoUserName();
+ const name=window.prompt('Qual nome deseja exibir no Fluxo?',current);
+ if(name===null)return;
+ if(!setFluxoUserName(name)){toast('⚠️','Nome inválido','Informe um nome para exibir no CRM.','coral');return}
+ updateUserIdentity();
+ toast('✅','Perfil atualizado',`${getFluxoUserName()} será exibido na visão geral.`,'gold');
+};
 document.addEventListener('click',e=>{
  const t=e.target.closest('[data-toast]');if(t)toast('💡','Atenção',t.dataset.toast,'');
  const oc=e.target.closest('[data-open-chat]');if(oc){openChat(oc.dataset.openChat);switchView('chat')}
@@ -28,7 +35,14 @@ document.addEventListener('click',e=>{
 /* ═══════ RELÓGIO / SAUDAÇÃO ═══════ */
 function tick(){const d=new Date();$('#clockChip').textContent=nowT();$('#dateChip').textContent=d.toLocaleDateString('pt-BR',{weekday:'short',day:'2-digit',month:'short'})}
 tick();setInterval(tick,15000);
-(()=>{const h=new Date().getHours();const g=h<12?'Bom dia':h<18?'Boa tarde':'Boa noite';const e=h<12?'☀️':h<18?'🌤️':'🌙';$('#greet').textContent=`${g}, Marina ${e}`})();
+function updateUserIdentity(){
+ const name=getFluxoUserName();
+ const h=new Date().getHours(),g=h<12?'Bom dia':h<18?'Boa tarde':'Boa noite',e=h<12?'☀️':h<18?'🌤️':'🌙';
+ $('#greet').textContent=`${g}, ${name} ${e}`;
+ const initials=name.split(' ').filter(Boolean).map(part=>part[0]).slice(0,2).join('').toUpperCase();
+ const rail=$('#railUser');rail.title=`${name} · online`;rail.innerHTML=`${initials}<i></i>`;
+}
+updateUserIdentity();
 
 /* ═══════ DASHBOARD ═══════ */
 function runCounters(){$$('[data-n]').forEach(el=>{const tgt=parseFloat(el.dataset.n),dec=+(el.dataset.d||0),t0=performance.now();
@@ -261,4 +275,4 @@ setTimeout(()=>{pushIncoming(byId('c4'),'Consegue me enviar ainda hoje? 🙏')},
 /* ═══════ INIT ═══════ */
 renderChatList();openChat('c1');renderKanban();renderCalendar();renderContacts();runCounters();railBadge();
 if(innerWidth<=1350)$('#chatShell').classList.add('no-detail');
-toast('✦','Bem-vinda ao Fluxo, Marina!','A Aurora está online e respondendo seus clientes automaticamente.','gold');
+toast('✦',`Bem-vinda ao Fluxo, ${getFluxoUserName()}!`,'A Aurora está online e respondendo seus clientes automaticamente.','gold');
