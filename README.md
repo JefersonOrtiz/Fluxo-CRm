@@ -2,6 +2,24 @@
 
 O CRM pode rodar como um site estático no GitHub Pages. Nesse modo, contatos, conversas e agenda são salvos no `localStorage` de cada navegador: não há servidor nem banco compartilhado na internet.
 
+## Continuar o desenvolvimento em outro PC com Codespaces
+
+O repositório inclui `.devcontainer/devcontainer.json` com Node.js 24. Ao criar o ambiente, as dependências de desenvolvimento da API são instaladas; ao iniciar ou retomar o ambiente, a prévia do CRM é iniciada automaticamente na porta 3000. A inicialização confere se o servidor já está ativo antes de iniciar outro processo.
+
+1. Entre no GitHub com sua conta pessoal **JefersonOrtiz** e abra a [branch atualizada](https://github.com/JefersonOrtiz/Fluxo-CRm/tree/codex/jf-system-crm-atualizacao).
+2. Clique em **Code → Codespaces → Create codespace on codex/jf-system-crm-atualizacao**. Aguarde a preparação do editor.
+3. A prévia abre pelo encaminhamento da porta 3000. Se a aba não abrir, acesse **Ports**, encontre **JF System CRM** e clique em **Open in Browser**. Mantenha a visibilidade da porta como **Private**.
+4. No outro PC, entre na mesma conta em [github.com/codespaces](https://github.com/codespaces) e retome **o mesmo Codespace** para encontrar os arquivos de trabalho no mesmo ambiente.
+5. Depois de editar, faça **Commit** e **Sync Changes/Push** para registrar as alterações na branch do GitHub. Em outro clone ou outro Codespace, faça **Pull** para obter os commits mais recentes.
+
+Se o Codespace já existia antes desta configuração, abra a paleta de comandos do editor e execute **Codespaces: Rebuild Container**. Para conferir ou retomar manualmente a prévia, execute `node .devcontainer/start.mjs`; os logs ficam em `data/codespaces-preview.log`. Ao alterar arquivos da interface, atualize a aba da prévia para visualizar o resultado.
+
+Essa configuração prepara a edição do código e a prévia do CRM. A API com PostgreSQL não é iniciada automaticamente nesta etapa. Os cadastros operacionais continuam no armazenamento do navegador, e os pagamentos dependem da configuração descrita abaixo. Usar o mesmo Codespace em outro navegador não transfere o `localStorage` do navegador anterior. O compartilhamento dos dados operacionais será implementado na integração das telas com a API e o banco central.
+
+Arquivos em `/workspaces`, como o código e o SQLite em `data/`, são preservados ao parar e retomar o mesmo Codespace. Eles não são copiados automaticamente para outro Codespace ou para outro PC. Os arquivos ignorados pelo Git, incluindo bancos e credenciais, também não são enviados ao repositório.
+
+Referências: [configuração de dev containers](https://docs.github.com/en/codespaces/setting-up-your-project-for-codespaces/adding-a-dev-container-configuration/introduction-to-dev-containers), [portas do Codespaces](https://docs.github.com/en/codespaces/developing-in-a-codespace/forwarding-ports-in-your-codespace) e [persistência dos arquivos](https://docs.github.com/en/codespaces/developing-in-a-codespace/persisting-environment-variables-and-temporary-files).
+
 ## Publicar no GitHub Pages
 
 1. Envie o projeto para a branch `main` do seu repositório GitHub.
