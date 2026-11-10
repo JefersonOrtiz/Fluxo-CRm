@@ -1,0 +1,7 @@
+Use case: precise-object-edit.
+Asset type: existing square app icon for JF System CRM, to be used in a dark green CRM sidebar and browser favicon.
+Input image: the referenced JPEG is the edit target, not merely a style reference.
+Primary request: replace ONLY the blue colors in this existing icon with the dark forest green and jade green tones of the CRM. Keep the icon's original design recognizable and otherwise unchanged.
+Color changes: recolor the navy blue outer rounded-square background to very dark forest green around #0e1613 and #131d18; recolor the blue 3D speech bubble to rich dark jade green around #1c5a44 and #1a7354, with highlights in muted green and natural darker green shading. The system accent is #31e3a2, for palette harmony, but do not make the whole icon neon.
+Preserve: the existing green upward zigzag arrow, its exact silhouette, location, tilt, 3D volume and glossy highlights; the speech bubble silhouette and small bottom tail; rounded-square framing, full composition, spacing, lighting direction, material finish, square aspect ratio, opaque background and white outside-corner areas.
+Constraints: change only blue surface colors and their corresponding blue reflections to greens. Do not add objects, text, letters, logos, watermarks, extra symbols, or new decorative details. Do not crop or redesign the icon. Deliver one clean finished square bitmap.

@@ -1,6 +1,19 @@
-data/*.sqlite
-data/*.sqlite-*
+# Dados e dependências do ambiente local
+data/
+*.sqlite
+*.sqlite-*
 node_modules/
 backend/node_modules/
-.env
-backend/.env
+
+# Credenciais: somente os exemplos vazios podem ser versionados
+.env*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+
+# Arquivos temporários
+*.log
+.DS_Store
+Thumbs.db

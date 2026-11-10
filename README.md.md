@@ -1,4 +1,4 @@
-# Fluxo — CRM Conversacional 💬
+# JF System CRM 💬
 
 CRM estilo WhatsApp com chat, Kanban de conexões, calendário e **Aurora**,
 uma assistente de IA que responde clientes automaticamente.

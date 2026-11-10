@@ -14,12 +14,18 @@ services:
       timeout: 5s
       retries: 10
   api:
-    build: ./backend
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
     environment:
       PORT: 3001
       DATABASE_URL: postgresql://fluxo:fluxo_local@postgres:5432/fluxo_crm
-      JWT_SECRET: desenvolvimento-troque-em-producao
+      JWT_SECRET: ${JWT_SECRET:-desenvolvimento-local-troque-antes-de-publicar}
       CORS_ORIGIN: http://localhost:8080
+      APP_PUBLIC_URL: ${APP_PUBLIC_URL:-http://localhost:8080}
+      MP_PUBLIC_KEY: ${MP_PUBLIC_KEY:-}
+      MP_ACCESS_TOKEN: ${MP_ACCESS_TOKEN:-}
+      MP_WEBHOOK_SECRET: ${MP_WEBHOOK_SECRET:-}
     depends_on:
       postgres:
         condition: service_healthy

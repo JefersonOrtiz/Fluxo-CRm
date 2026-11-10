@@ -3,40 +3,30 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Fluxo — CRM Conversacional</title>
+<title>JF System CRM</title>
+<meta name="application-name" content="JF System CRM">
+<link rel="icon" type="image/png" sizes="64x64" href="assets/jf-system-crm-favicon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,600;12..96,700;12..96,800&family=Instrument+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="css/workspace.css">
+<link rel="stylesheet" href="css/plans.css">
+<link rel="stylesheet" href="css/billing.css">
 </head>
 <body>
 <div class="app">
 
   <!-- ══════ MENU LATERAL ══════ -->
-  <nav class="rail">
-    <div class="logo" title="Fluxo CRM">
-      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-9 8.36L4 21l1.26-4.06A8.5 8.5 0 1 1 21 11.5z"/><path d="M12.5 8l-2 4h3l-2 4"/></svg>
-      <span class="pulse"></span>
-    </div>
-    <button class="rail-btn" data-view="chat"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg><span class="rbadge" id="railBadge">3</span><span class="tip">Conversas</span></button>
-    <button class="rail-btn" data-view="contacts"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.8-3.2 3.4-5 6.5-5s5.7 1.8 6.5 5"/><path d="M16 5a3.5 3.5 0 0 1 0 6.6M21.5 20c-.5-2.2-1.9-3.8-3.8-4.5"/></svg><span class="tip">Clientes</span></button>
-    <button class="rail-btn active" data-view="dashboard"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><rect x="3" y="3" width="7.5" height="9" rx="2"/><rect x="13.5" y="3" width="7.5" height="5.5" rx="2"/><rect x="13.5" y="12" width="7.5" height="9" rx="2"/><rect x="3" y="15.5" width="7.5" height="5.5" rx="2"/></svg><span class="tip">Dashboard</span></button>
-    <button class="rail-btn" data-view="kanban"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><rect x="3" y="4" width="5.2" height="16" rx="1.6"/><rect x="9.4" y="4" width="5.2" height="10" rx="1.6"/><rect x="15.8" y="4" width="5.2" height="13" rx="1.6"/></svg><span class="tip">Conexões · Kanban</span></button>
-    <button class="rail-btn" data-view="calendar"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><rect x="3" y="5" width="18" height="16" rx="2.5"/><path d="M8 3v4M16 3v4M3 10h18"/></svg><span class="tip">Calendário</span></button>
-    <button class="rail-btn" data-view="ai"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9L12 3z"/><path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8L19 15z"/></svg><span class="tip">Aurora IA</span></button>
-    <button class="rail-btn" data-view="integrations" aria-label="Integrações"><span class="rail-emoji">↔</span><span class="tip">Integrações</span></button>
-    <button class="rail-btn" data-view="organization" aria-label="Organização"><span class="rail-emoji">⌘</span><span class="tip">Organização</span></button>
-    <button class="rail-btn" data-view="admin" aria-label="Administração"><span class="rail-emoji">⚙</span><span class="tip">Administração</span></button>
-    <div class="rail-spacer"></div>
-    <button class="rail-btn" id="settingsBtn"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg><span class="tip">Configurações</span></button>
-    <div class="rail-user" id="railUser" title="Marina Duarte · online">MD<i></i></div>
-  </nav>
+  <nav class="rail" id="sidebar" aria-label="Menu principal"></nav>
+  <button type="button" class="sidebar-backdrop" id="sidebarBackdrop" aria-label="Fechar menu" hidden></button>
+  <button type="button" class="mobile-nav-toggle" id="mobileNavToggle" aria-expanded="false" aria-controls="sidebar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg><img class="mobile-brand-icon" src="assets/jf-system-crm-icon.webp" alt="" width="28" height="28">JF System CRM<small>Menu</small></button>
 
   <main class="workspace">
 
     <!-- ══════ DASHBOARD ══════ -->
     <section class="view active" id="view-dashboard">
       <header class="view-head">
-        <div><p class="crumb">Visão geral</p><h1 id="greet">Bom dia, Marina ☀️</h1></div>
+        <div><p class="crumb">Operação / Dashboard</p><h1 id="greet">Bom dia, Marina ☀️</h1></div>
         <div class="head-actions">
           <div class="chip-clock"><span class="livedot"></span><span id="dateChip">—</span>·<b id="clockChip">--:--</b></div>
           <button class="btn" data-open-newchat>＋ Nova conversa</button>
@@ -82,7 +72,7 @@
 
     <!-- ══════ CHAT ══════ -->
     <section class="view" id="view-chat">
-      <div class="chat-shell" id="chatShell">
+      <div class="chat-shell no-detail" id="chatShell">
         <div class="chat-list-pane">
           <div class="pane-head">
             <div class="pane-title"><h2>Conversas</h2><button class="icon-btn" data-open-newchat title="Nova conversa"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></button></div>
@@ -100,12 +90,17 @@
         <div class="conv-pane">
           <div class="conv-head">
             <button class="icon-btn back-btn" data-back><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M15 18l-6-6 6-6"/></svg></button>
-            <span id="chAva"></span>
-            <div class="ch-info"><b id="chName">—</b><span id="chSub">—</span></div>
+            <div class="client-heading">
+              <button type="button" class="client-header" id="clientDetailsToggle" aria-controls="detailPane" aria-expanded="false" title="Abrir detalhes do cliente"><span id="chAva"></span><span class="ch-info"><b id="chName">—</b></span></button>
+              <div class="service-window" id="serviceWindow" data-status="unavailable" aria-describedby="windowHint">
+                <div class="service-window-summary"><span class="service-window-state" role="status"><i aria-hidden="true"></i><b id="windowStatus">Janela de 24h expirada</b></span><span id="windowRemaining" hidden></span><span class="service-window-last-message" id="windowLastMessage" hidden>Última mensagem: <time id="windowOpenedAt">—</time></span><button type="button" id="windowTemplates" data-goto="templates" hidden>Ver templates ↗</button></div>
+                <p class="service-window-hint" id="windowHint">Aguardando informações da conversa.</p>
+              </div>
+            </div>
             <div class="ai-switch">✦ Aurora <span class="sw gold on" id="aiSwitch"></span></div>
             <button class="icon-btn" title="Ligar" data-toast="📞 Ligação simulada nesta demo"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.13.96.36 1.9.7 2.8a2 2 0 0 1-.45 2.1L8.1 9.9a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.45c.9.34 1.84.57 2.8.7A2 2 0 0 1 22 16.9z"/></svg></button>
             <button class="icon-btn" title="Vídeo" data-toast="🎥 Vídeo-chamada simulada"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><rect x="2" y="6" width="13" height="12" rx="2.5"/><path d="M22 8.5l-7 3.5 7 3.5v-7z"/></svg></button>
-            <button class="icon-btn" id="detailBtn" title="Detalhes do cliente"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 8h.01M11 12h1v4h1"/></svg></button>
+            <div class="contact-presence" id="chPresence"><span id="chSub">—</span></div>
           </div>
 
           <div id="msgScroll"><div id="msgsBox"></div></div>
@@ -119,7 +114,9 @@
           </div>
         </div>
 
-        <aside class="detail-pane" id="detailPane">
+        <button type="button" class="detail-backdrop" id="detailBackdrop" aria-label="Fechar detalhes do cliente" hidden></button>
+        <aside class="detail-pane" id="detailPane" aria-labelledby="clientDetailsTitle" tabindex="-1" hidden>
+          <div class="detail-head"><h3 id="clientDetailsTitle">Detalhes do cliente</h3><button type="button" class="icon-btn" id="closeClientDetails" aria-label="Fechar detalhes do cliente">✕</button></div>
           <div class="dsec">
             <div class="dprofile"><span id="dAva"></span><div style="flex:1;min-width:0"><b id="dName">—</b><small id="dComp"></small><small id="dPhone" class="mono"></small></div><button class="icon-btn" id="favBtn" title="Favoritar">★</button></div>
             <div class="drows"><div>📧 <b id="dMail">—</b></div><div>🏷️ Origem: <b>WhatsApp · Campanha Setembro</b></div></div>
@@ -143,8 +140,8 @@
     <!-- ══════ KANBAN ══════ -->
     <section class="view" id="view-kanban">
       <header class="view-head">
-        <div><p class="crumb">Conexões</p><h1>Pipeline de vendas</h1></div>
-        <div class="head-actions"><div class="chip-clock">💼 Total no funil · <b id="kanbanTotal">R$ 0</b></div><button class="btn ghost" data-toast="🧲 Lead manual disponível na versão completa">＋ Novo lead</button></div>
+        <div><p class="crumb">Operação</p><h1>Fluxo de Atendimento</h1></div>
+        <div class="head-actions"><div class="chip-clock">💼 Total no funil · <b id="kanbanTotal">R$ 0</b></div><button class="btn ghost" data-open-modal="client">＋ Novo Cliente</button></div>
       </header>
       <div class="board" id="board"></div>
     </section>
@@ -152,7 +149,7 @@
     <!-- ══════ CALENDÁRIO ══════ -->
     <section class="view" id="view-calendar">
       <header class="view-head">
-        <div><p class="crumb">Agenda</p><h1>Calendário</h1></div>
+        <div><p class="crumb">Sistema / Integrações</p><h1>Calendário</h1></div>
         <div class="head-actions"><button class="btn gold" id="newEventBtn">＋ Novo evento</button></div>
       </header>
       <div class="cal-wrap">
@@ -175,14 +172,14 @@
     <!-- ══════ AURORA IA ══════ -->
     <section class="view" id="view-ai">
       <header class="view-head">
-        <div><p class="crumb">Inteligência artificial</p><h1>Aurora ✦ sua atendente virtual</h1></div>
+        <div><p class="crumb">Operação / Aurora IA</p><h1>Aurora ✦ sua atendente virtual</h1></div>
         <div class="head-actions"><div class="chip-clock"><span class="livedot"></span> Aurora · online e treinada</div></div>
       </header>
       <div class="ai-wrap">
         <div class="ai-col">
           <div class="card">
             <h3>🧬 Persona & tom de voz</h3>
-            <textarea class="persona-txt" id="personaTxt">Você é a Aurora, assistente virtual da Fluxo. Atende pelo WhatsApp com simpatia, objetividade e emojis leves. Seu objetivo é qualificar leads, tirar dúvidas sobre planos e agendar reuniões para o time comercial. Nunca invente preços fora da tabela.</textarea>
+            <textarea class="persona-txt" id="personaTxt">Você é a Aurora, assistente virtual do JF System CRM. Atende pelo WhatsApp com simpatia, objetividade e emojis leves. Seu objetivo é qualificar leads, tirar dúvidas sobre planos e agendar reuniões para o time comercial. Nunca invente preços fora da tabela.</textarea>
             <div class="toneseg"><button class="tone" data-tone>Formal</button><button class="tone on" data-tone>Amigável</button><button class="tone" data-tone>Descontraído</button></div>
           </div>
           <div class="card">
@@ -211,7 +208,7 @@
           <div class="card ai-card">
             <h3 style="color:var(--gold)">🧪 Laboratório de testes</h3>
             <div class="pg-box" id="pgBox"><div class="msg them" style="max-width:85%"><p>Envie uma mensagem de teste e veja como a Aurora responderia ao seu cliente.</p></div></div>
-            <div class="pg-row"><input class="inp" id="pgInput" placeholder='Ex.: "quanto custa o plano pro?"'><button class="btn gold" id="pgBtn">Testar ✦</button></div>
+            <div class="pg-row"><input class="inp" id="pgInput" placeholder='Ex.: "quanto custa o plano profissional?"'><button class="btn gold" id="pgBtn">Testar ✦</button></div>
           </div>
           <div class="card">
             <h3>💬 Mensagens programadas</h3>
@@ -226,16 +223,16 @@
     <!-- ══════ CONTATOS ══════ -->
     <section class="view" id="view-contacts">
       <header class="view-head">
-        <div><p class="crumb">Base de clientes</p><h1>Clientes</h1></div>
-        <div class="head-actions"><div class="search-box" style="margin:0;min-width:260px"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--dim)" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg><input id="ctSearch" placeholder="Filtrar contatos…"></div><button class="btn ghost" data-toast="📥 Importação CSV disponível na versão completa">⇪ Importar</button></div>
+        <div><p class="crumb">Operação / Clientes</p><h1>Base de Clientes</h1><p class="view-description">Relacionamentos, informações e histórico dos seus clientes em um só lugar.</p></div>
+        <div class="head-actions"><div class="search-box" style="margin:0;min-width:260px"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--dim)" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg><input id="ctSearch" placeholder="Buscar nome, empresa, telefone…" aria-label="Buscar clientes"></div><button class="btn" data-open-modal="client">＋ Novo Cliente</button></div>
       </header>
       <div class="card table-card">
-        <table><thead><tr><th>Cliente</th><th>Telefone</th><th>Estágio</th><th>Valor</th><th>Tags</th><th>IA</th></tr></thead><tbody id="ctBody"></tbody></table>
+        <table><caption><span id="clientCount">0</span> clientes na sua base</caption><thead><tr><th>Cliente</th><th>Telefone</th><th>Estágio</th><th>Valor</th><th>Tags</th><th>IA</th></tr></thead><tbody id="ctBody"></tbody></table>
       </div>
     </section>
 
     <section class="view" id="view-integrations">
-      <header class="view-head"><div><p class="crumb">Canais e automações</p><h1>Integrações</h1></div><div class="head-actions"><span class="integ-state" id="metaState">Não conectado</span></div></header>
+      <header class="view-head"><div><p class="crumb">Sistema / Integrações</p><h1>Meta API Cloud</h1></div><div class="head-actions"><span class="integ-state" id="metaState">Não conectado</span></div></header>
       <div class="manage-wrap">
         <div class="card meta-hero"><div class="meta-logo">∞</div><div><h3>WhatsApp Business Platform</h3><p>Conecte o App da Meta à sua conta WhatsApp Business administrada pelo Business Manager.</p></div><span class="secure-label">Credenciais protegidas no backend</span></div>
         <div class="manage-grid">
@@ -247,32 +244,165 @@
           </div>
           <div class="card"><h3>Checklist de conexão</h3><ol class="checklist"><li><span>1</span>Crie um App do tipo <b>Business</b> no Meta for Developers.</li><li><span>2</span>Adicione o produto <b>WhatsApp</b> e vincule a Business Manager.</li><li><span>3</span>Cadastre um número, copie o Phone Number ID e o WABA ID.</li><li><span>4</span>Configure no backend o webhook para mensagens e status.</li></ol><div class="webhook-box"><small>URL do webhook (quando houver backend)</small><code id="webhookUrl">/api/meta/webhook</code></div><a class="btn ghost external-btn" href="https://developers.facebook.com/apps/" target="_blank" rel="noreferrer">Abrir Meta for Developers ↗</a></div>
         </div>
-        <div class="notice">⚠️ GitHub Pages é estático: ele não pode guardar App Secret nem receber webhooks da Meta. Para conectar de verdade, use um backend com variáveis de ambiente e HTTPS.</div>
+        <div class="inline-note" style="margin-top:16px">A conexão com a Meta ainda não está ativa. Salvar os identificadores prepara sua configuração; a validação e o envio de mensagens dependem da conexão com o serviço.</div>
       </div>
     </section>
 
-    <section class="view" id="view-organization">
-      <header class="view-head"><div><p class="crumb">Estrutura interna</p><h1>Organização</h1></div><div class="head-actions"><div class="chip-clock"><b id="orgMemberCount">0</b> colaboradores</div></div></header>
-      <div class="manage-wrap org-layout"><div class="card"><h3>Setores</h3><div id="departmentList" class="department-list"></div></div><div class="card"><h3>Colaboradores</h3><div id="memberList" class="member-list"></div></div></div>
+    <section class="view" id="view-bulk">
+<header class="view-head"><div><p class="crumb">Operação / Clientes</p><h1>Envio em Massa</h1><p class="view-description">Prepare campanhas com templates e escolha os clientes que vão receber sua mensagem.</p></div><div class="head-actions"><button class="btn ghost" data-goto="templates">Gerenciar templates ↗</button></div></header>
+      <div class="page-stack">
+        <div class="page-grid wide-left">
+          <div class="card"><h3>Preparar campanha</h3><form id="bulkForm">
+            <label class="field" for="bulkName">Nome da campanha<input class="inp" id="bulkName" required maxlength="100" placeholder="Ex.: Acompanhamento de novembro"></label>
+            <label class="field" for="bulkTemplate">Template<select class="inp" id="bulkTemplate" required></select><small>Os templates cadastrados aqui são rascunhos até serem aprovados na Meta.</small></label>
+            <label class="field" for="bulkTag">Público<select class="inp" id="bulkTag"><option value="">Todos os clientes</option></select></label>
+            <div class="list-header"><h3>Destinatários</h3><span class="count-pill" id="recipientCount">0 clientes</span></div><div id="recipientList" class="recipient-list"></div>
+            <div class="form-actions"><button class="btn" type="submit">Salvar rascunho</button><button class="btn ghost" type="button" disabled title="Disponível após conectar a Meta e aprovar um template">Enviar templates</button></div>
+          </form></div>
+          <div class="card"><h3>Prévia da mensagem</h3><div class="message-preview"><span class="preview-label">WhatsApp · prévia</span><div class="preview-bubble" id="bulkPreview">Cadastre e selecione um template para visualizar a mensagem.</div></div><p class="inline-note" style="margin-top:14px">O envio será habilitado após conectar a <a href="#integrations" data-goto="integrations">Meta API Cloud</a> e vincular um template aprovado.</p></div>
+        </div>
+        <div class="card"><div class="list-header"><h3>Rascunhos de campanhas</h3><span class="count-pill" id="campaignCount">0</span></div><div id="campaignList" class="mini-list"></div></div>
+      </div>
     </section>
 
-    <section class="view" id="view-admin">
-      <header class="view-head"><div><p class="crumb">Controle da empresa</p><h1>Administração</h1></div><div class="head-actions"><span class="secure-label">Dados salvos neste navegador</span></div></header>
-      <div class="manage-wrap admin-grid">
-        <div class="card"><h3>Novo setor</h3><form id="departmentForm" class="compact-form"><input class="inp" id="departmentName" required placeholder="Ex.: Sucesso do Cliente"><button class="btn">Adicionar setor</button></form><div id="adminDepartmentList" class="mini-list"></div></div>
-        <div class="card"><h3>Novo colaborador</h3><form id="memberForm" class="form-grid"><label>Nome<input class="inp" id="memberName" required placeholder="Nome completo"></label><label>E-mail<input class="inp" id="memberEmail" type="email" required placeholder="nome@empresa.com"></label><label>Setor<select class="inp" id="memberDepartment"></select></label><label>Privilégio<select class="inp" id="memberRole"></select></label><button class="btn">Cadastrar colaborador</button></form></div>
-        <div class="card"><h3>Privilégios</h3><div id="roleList" class="role-list"></div><form id="roleForm" class="compact-form"><input class="inp" id="roleName" required placeholder="Novo privilégio"><button class="btn ghost">Adicionar</button></form></div>
-        <div class="card"><h3>Tags de clientes</h3><p class="form-help">Use tags para segmentar clientes e automatizações.</p><div id="adminTagList" class="tagbox"></div><form id="tagForm" class="compact-form"><input class="inp" id="adminTagName" required placeholder="Ex.: cliente VIP"><button class="btn ghost">Adicionar</button></form></div>
+    <section class="view" id="view-orders">
+<header class="view-head"><div><p class="crumb">Operação / Clientes</p><h1>Ordens de Serviço</h1><p class="view-description">Acompanhe os serviços de cada cliente, do pedido à conclusão.</p></div><div class="head-actions"><button class="btn" data-open-modal="order">＋ Nova ordem de serviço</button></div></header>
+      <div class="page-stack"><div class="summary-strip"><div class="summary-cell"><small>Total de ordens</small><b id="ordersTotal">0</b></div><div class="summary-cell"><small>Em aberto</small><b id="ordersOpen">0</b></div><div class="summary-cell"><small>Concluídas</small><b class="jade" id="ordersDone">0</b></div></div>
+        <div class="page-toolbar"><div class="search-box"><input id="orderSearch" placeholder="Buscar ordem, serviço ou cliente…" aria-label="Buscar ordens de serviço"></div><select class="inp" id="orderFilter" aria-label="Filtrar status da ordem"><option value="">Todos os status</option><option>Aberta</option><option>Em andamento</option><option>Concluída</option><option>Cancelada</option></select></div>
+        <div class="card table-card"><table><thead><tr><th>Ordem / Serviço</th><th>Cliente</th><th>Prazo</th><th>Valor</th><th>Status</th></tr></thead><tbody id="orderList"></tbody></table></div>
       </div>
+    </section>
+
+    <section class="view" id="view-connections">
+<header class="view-head"><div><p class="crumb">Sistema / Conexões</p><h1>IA e Gateway</h1><p class="view-description">Organize o provedor de inteligência artificial e o endereço do seu gateway.</p></div><div class="head-actions"><span class="integ-state">Não conectado</span></div></header>
+      <div class="page-stack"><div class="page-grid"><div class="card"><h3>Provedor de IA</h3><form id="gatewayForm">
+        <label class="field" for="gatewayProvider">Provedor<select class="inp" id="gatewayProvider"><option value="">Selecione um provedor</option><option>OpenAI</option><option>Google Gemini</option><option>Anthropic</option><option>Outro</option></select></label>
+        <label class="field" for="gatewayModel">Modelo<input class="inp" id="gatewayModel" maxlength="100" placeholder="Nome do modelo escolhido"></label>
+        <label class="field" for="gatewayUrl">URL do gateway<input class="inp" id="gatewayUrl" type="url" placeholder="https://seu-gateway.com"><small>Informe apenas o endereço público, sem senhas ou tokens.</small></label><button class="btn">Salvar preferências</button></form></div>
+        <div class="card"><h3>Suas automações</h3><p class="form-help">O provedor e o gateway ainda precisam ser conectados para executar automações. A Aurora mantém o laboratório de testes local.</p><div class="status-list"><button class="status-row" data-goto="ai">✦ Laboratório da Aurora <small>Abrir ↗</small></button><button class="status-row" data-goto="workflows">↳ Workflows <small>Organizar ↗</small></button><button class="status-row" data-goto="templates">▤ Templates <small>Gerenciar ↗</small></button></div></div></div>
+      </div>
+    </section>
+
+    <section class="view" id="view-workflows">
+<header class="view-head"><div><p class="crumb">Sistema / Conexões</p><h1>Workflows</h1><p class="view-description">Desenhe as etapas das suas automações de atendimento.</p></div><div class="head-actions"><button class="btn" data-open-modal="workflow">＋ Novo workflow</button></div></header>
+      <div class="page-stack"><p class="inline-note">Os workflows são salvos como rascunhos. A execução será habilitada quando o gateway estiver conectado.</p><div id="workflowList" class="draft-list"></div></div>
+    </section>
+
+    <section class="view" id="view-templates">
+<header class="view-head"><div><p class="crumb">Sistema / Conexões</p><h1>Templates</h1><p class="view-description">Centralize os modelos de mensagem que sua equipe usa no atendimento.</p></div><div class="head-actions"><button class="btn" data-open-modal="template">＋ Novo template</button></div></header>
+      <div class="page-stack"><div class="page-toolbar"><div class="search-box"><input id="templateSearch" placeholder="Buscar template…" aria-label="Buscar templates"></div><span class="count-pill" id="templateCount">0 templates</span></div><div id="templateList" class="draft-list"></div></div>
+    </section>
+
+    <section class="view" id="view-settings">
+<header class="view-head"><div><p class="crumb">Gestão / Configurações</p><h1>Status e Tags</h1><p class="view-description">Organize as etapas do atendimento e os marcadores dos seus clientes.</p></div><div class="head-actions"></div></header>
+      <div class="page-stack"><div class="page-grid"><div class="card"><h3>Status do atendimento</h3><p class="form-help">Estas são as etapas disponíveis no Fluxo de Atendimento.</p><div id="statusList" class="status-list"></div><form id="statusForm" class="compact-form"><input class="inp" id="statusName" required maxlength="40" aria-label="Nome do novo status" placeholder="Novo status"><button class="btn">Adicionar</button></form></div>
+      <div class="card"><h3>Tags de clientes</h3><p class="form-help">Use tags para segmentar clientes e preparar campanhas.</p><div id="adminTagList" class="tagbox"></div><form id="tagForm" class="compact-form"><input class="inp" id="adminTagName" required maxlength="40" aria-label="Nome da nova tag" placeholder="Ex.: cliente VIP"><button class="btn ghost">Adicionar</button></form></div></div></div>
+    </section>
+
+    <section class="view" id="view-members">
+<header class="view-head"><div><p class="crumb">Gestão / Equipe</p><h1>Usuários</h1><p class="view-description">Pessoas, departamentos e funções da sua equipe.</p></div><div class="head-actions"><div class="chip-clock"><b id="orgMemberCount">0</b> usuários</div></div></header>
+      <div class="page-stack"><div class="page-grid wide-left"><div class="card"><h3>Usuários da equipe</h3><div id="memberList" class="member-list"></div></div>
+      <div class="card"><h3>Novo usuário</h3><form id="memberForm"><label class="field" for="memberName">Nome<input class="inp" id="memberName" required maxlength="80" placeholder="Nome completo"></label><label class="field" for="memberEmail">E-mail<input class="inp" id="memberEmail" type="email" required placeholder="nome@empresa.com"></label><label class="field" for="memberDepartment">Departamento<select class="inp" id="memberDepartment"></select></label><label class="field" for="memberRole">Função<select class="inp" id="memberRole"></select></label><button class="btn">Cadastrar usuário</button></form></div></div></div>
+    </section>
+
+    <section class="view" id="view-departments">
+<header class="view-head"><div><p class="crumb">Gestão / Equipe</p><h1>Departamentos</h1><p class="view-description">Distribua sua equipe entre os departamentos da operação.</p></div><div class="head-actions"></div></header>
+      <div class="page-stack"><div class="page-grid wide-left"><div class="card"><h3>Departamentos da empresa</h3><div id="departmentList" class="department-list"></div></div><div class="card"><h3>Novo departamento</h3><form id="departmentForm" class="compact-form"><input class="inp" id="departmentName" required maxlength="60" aria-label="Nome do departamento" placeholder="Ex.: Sucesso do Cliente"><button class="btn">Adicionar</button></form><div id="adminDepartmentList" class="mini-list"></div></div></div></div>
+    </section>
+
+    <section class="view" id="view-roles">
+<header class="view-head"><div><p class="crumb">Gestão / Equipe</p><h1>Funções</h1><p class="view-description">Organize as responsabilidades das pessoas na sua equipe.</p></div><div class="head-actions"></div></header>
+      <div class="page-stack"><div class="page-grid wide-left"><div class="card"><h3>Funções da equipe</h3><div id="roleList" class="role-list"></div></div><div class="card"><h3>Nova função</h3><form id="roleForm"><label class="field" for="roleName">Nome da função<input class="inp" id="roleName" required maxlength="60" placeholder="Ex.: Supervisor"></label><label class="field" for="roleDescription">Descrição<textarea class="inp" id="roleDescription" maxlength="240" placeholder="Quais são as responsabilidades desta função?"></textarea></label><button class="btn">Adicionar função</button></form><p class="inline-note" style="margin-top:16px">As funções organizam a equipe nesta versão. O controle de acesso depende da autenticação do sistema.</p></div></div></div>
+    </section>
+
+    <section class="view" id="view-profile">
+<header class="view-head"><div><p class="crumb">Perfil</p><h1>Meus Dados</h1><p class="view-description">Mantenha seu perfil e suas preferências de atendimento atualizados.</p></div><div class="head-actions"></div></header>
+      <div class="page-stack"><div class="card account-card">
+        <div class="account-avatar" id="accountAvatar">MD</div>
+        <div class="account-identity"><h3 id="accountName">Marina Duarte</h3><p id="accountRole">Administrador</p>
+          <div class="profile-photo-actions"><button type="button" class="btn ghost" id="changeProfilePhoto" aria-describedby="profilePhotoHelp">Alterar foto</button><button type="button" class="remove-photo-btn" id="removeProfilePhoto" hidden>Remover foto</button></div>
+          <input type="file" id="profilePhotoInput" accept="image/jpeg,image/png,image/webp" aria-label="Escolher foto de perfil" hidden>
+          <p class="profile-photo-help" id="profilePhotoHelp">JPG, PNG ou WebP. Até 5 MB. Confirme em Salvar alterações.</p>
+          <p class="profile-photo-feedback" id="profilePhotoFeedback" role="status" aria-live="polite" hidden></p>
+        </div><span class="secure-label">Perfil local</span>
+      </div><form id="profileForm" class="page-grid"><div class="card"><h3>Dados pessoais</h3><label class="field" for="profileName">Nome completo<input class="inp" id="profileName" required maxlength="60" autocomplete="name"></label><label class="field" for="profileEmail">E-mail<input class="inp" id="profileEmail" type="email" autocomplete="email"></label><label class="field" for="profileCompany">Empresa<input class="inp" id="profileCompany" maxlength="100" autocomplete="organization" placeholder="Nome da sua empresa"></label><button class="btn" id="profileSaveButton">Salvar alterações</button></div><div class="card" id="businessHours"><h3>Horário de funcionamento</h3><p class="form-help">Defina sua preferência de horário para o atendimento.</p><div class="field-row"><label class="field" for="businessStart">Abertura<input class="inp" id="businessStart" type="time" required></label><label class="field" for="businessEnd">Encerramento<input class="inp" id="businessEnd" type="time" required></label></div><label class="field" for="businessDays">Dias de atendimento<select class="inp" id="businessDays"><option value="weekdays">Segunda a sexta</option><option value="saturday">Segunda a sábado</option><option value="everyday">Todos os dias</option></select></label><p class="inline-note">As preferências ficam salvas neste navegador. Elas ainda não alteram as respostas automáticas.</p></div></form></div>
+    </section>
+
+    <section class="view" id="view-subscription">
+<header class="view-head"><div><p class="crumb">Gestão</p><h1>Assinatura</h1><p class="view-description">Consulte o plano e as informações de cobrança da empresa.</p></div><div class="head-actions"></div></header>
+      <div class="page-stack">
+        <section class="pricing-section" aria-labelledby="subscriptionPlansTitle">
+          <div class="pricing-heading"><div><h2 id="subscriptionPlansTitle">Um plano para <span>sua equipe.</span></h2><p>Conheça os planos do JF System CRM.</p></div><span class="pricing-period">Mensal</span></div>
+          <div class="pricing-grid" id="subscriptionPlans"></div>
+          <p class="pricing-note">Valores mensais em reais. O período de teste e o limite de usuários variam conforme o plano.</p>
+        </section>
+        <div id="billingNotice" class="billing-notice" role="status" aria-live="polite">Consultando disponibilidade dos pagamentos…</div>
+        <p class="billing-feedback" id="billingFeedback" role="status" aria-live="polite" hidden></p>
+        <section class="card" id="billingLogin" hidden aria-labelledby="billingLoginTitle">
+          <h3 id="billingLoginTitle">Acesse a conta da empresa</h3><p class="form-help">Entre com o usuário administrador para gerenciar a assinatura.</p>
+          <form id="billingLoginForm" class="billing-login-form"><label class="field" for="billingLoginEmail">E-mail<input class="inp" id="billingLoginEmail" type="email" autocomplete="username" required></label><label class="field" for="billingLoginPassword">Senha<input class="inp" id="billingLoginPassword" type="password" autocomplete="current-password" required></label><button class="btn" type="submit">Entrar</button></form>
+        </section>
+        <section class="card billing-account" id="billingAccount" hidden aria-label="Situação da assinatura"></section>
+        <section class="card billing-checkout" id="billingCheckout" aria-labelledby="billingCheckoutTitle">
+          <form id="billingCheckoutForm" novalidate>
+            <h3 id="billingCheckoutTitle">Como prefere pagar?</h3><p class="form-help">Escolha a forma de pagamento da assinatura do CRM.</p>
+            <fieldset class="billing-methods"><legend class="sr-only">Forma de pagamento</legend>
+              <label class="billing-method"><input type="radio" name="billingMethod" value="card" checked><svg class="billing-method-symbol" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="2" y="4" width="20" height="16" rx="3"/><path d="M2 9h20M6 15h4"/></svg><span><b>Cartão de crédito</b><small>Renovação automática mensal</small></span></label>
+              <label class="billing-method"><input type="radio" name="billingMethod" value="pix"><svg class="billing-method-symbol" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="m3 10 7-7a3 3 0 0 1 4 0l7 7a3 3 0 0 1 0 4l-7 7a3 3 0 0 1-4 0l-7-7a3 3 0 0 1 0-4Z"/><path d="m3 8 5 5a2 2 0 0 0 3 0l2-2a2 2 0 0 1 3 0l5 5M3 16l5-5a2 2 0 0 1 3 0l2 2a2 2 0 0 0 3 0l5-5"/></svg><span><b>PIX</b><small>Para quem prefere pagar sem cartão</small></span></label>
+            </fieldset>
+            <div id="billingCardInfo" class="billing-method-info"><b>Seu cartão fica protegido.</b><p>Os dados são tokenizados pelo Mercado Pago no navegador. O CRM não recebe nem armazena o número do cartão ou o CVV.</p><p>Após o teste, a mensalidade é cobrada automaticamente. Você pode cancelar a renovação na sua assinatura.</p></div>
+            <div id="billingCardFields" class="billing-fields" hidden>
+              <div class="field billing-span"><label for="billingCardNumber">Número do cartão</label><div id="billingCardNumber" class="inp billing-secure-field"></div></div>
+              <div class="field"><label for="billingCardExpiration">Validade</label><div id="billingCardExpiration" class="inp billing-secure-field"></div></div><div class="field"><label for="billingCardCode">CVV</label><div id="billingCardCode" class="inp billing-secure-field"></div></div>
+              <label class="field billing-span" for="billingCardName">Nome no cartão<input class="inp" id="billingCardName" autocomplete="cc-name"></label>
+              <label class="field billing-span" for="billingCardEmail">E-mail do pagador<input class="inp" id="billingCardEmail" type="email" autocomplete="email"></label>
+              <label class="field" for="billingCardDocType">Documento<select class="inp" id="billingCardDocType"></select></label><label class="field" for="billingCardDocNumber">Número do documento<input class="inp" id="billingCardDocNumber" inputmode="numeric"></label>
+              <select id="billingCardIssuer" hidden aria-label="Banco emissor"></select><select id="billingCardInstallments" hidden aria-label="Parcelas"></select>
+              <p class="inline-note billing-span">O Mercado Pago pode fazer uma pequena cobrança de validação e devolvê-la em seguida.</p>
+            </div>
+            <div id="billingPixInfo" class="billing-method-info" hidden><b>Uma mensalidade por PIX.</b><p>Pague com QR Code ou PIX Copia e Cola. A cada mês, gere um novo PIX nesta página. Esta opção não faz débito automático.</p><p>Durante o teste gratuito, nenhum PIX será cobrado. O primeiro pagamento fica disponível ao fim do teste.</p></div>
+            <div id="billingPixFields" class="billing-fields" hidden>
+              <label class="field" for="billingPixFirstName">Nome<input class="inp" id="billingPixFirstName" autocomplete="given-name" maxlength="100" required disabled></label><label class="field" for="billingPixLastName">Sobrenome<input class="inp" id="billingPixLastName" autocomplete="family-name" maxlength="100" required disabled></label>
+              <label class="field billing-span" for="billingPixEmail">E-mail para cobrança<input class="inp" id="billingPixEmail" type="email" autocomplete="email" required disabled></label><label class="field billing-span" for="billingPixDocument">CPF ou CNPJ<input class="inp" id="billingPixDocument" inputmode="numeric" maxlength="18" required disabled></label>
+            </div>
+            <label class="billing-consent"><input id="billingAccept" type="checkbox"><span id="billingConsentText">Autorizo a cobrança mensal recorrente no cartão após o período de teste, até o cancelamento.</span></label>
+            <button class="btn billing-submit" id="billingSubmit" type="submit" disabled>Pagamento ainda não habilitado</button>
+          </form>
+          <aside class="billing-summary" aria-label="Resumo da contratação"><span class="billing-eyebrow">SUA ASSINATURA</span><div id="billingSummary"></div><div class="billing-provider"><svg class="billing-method-symbol" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 3 4 6v6c0 5 8 9 8 9s8-4 8-9V6Z"/><path d="m8 12 3 3 5-6"/></svg><div><b>Pagamento via Mercado Pago</b><small>Confirmação segura pelo provedor.</small></div></div></aside>
+        </section>
+        <section class="card billing-pix-result" id="billingPixResult" hidden aria-labelledby="billingPixTitle"><div><span class="billing-eyebrow">AGUARDANDO PAGAMENTO</span><h3 id="billingPixTitle">Pague sua mensalidade com PIX</h3><p id="billingPixExpiry" class="form-help"></p><label class="field" for="billingPixCode">PIX Copia e Cola<textarea id="billingPixCode" class="inp" rows="3" readonly></textarea></label><div class="form-actions"><button class="btn" id="billingCopyPix" type="button">Copiar código PIX</button><button class="btn ghost" id="billingCheckPix" type="button">Já paguei · verificar</button></div><p class="inline-note">A confirmação pode levar alguns instantes. O acesso pago só será confirmado após a aprovação pelo Mercado Pago.</p></div><img id="billingPixQr" alt="QR Code para pagar a mensalidade" width="220" height="220"></section>
+        <section class="card" id="billingHistory" hidden aria-labelledby="billingHistoryTitle"><h3 id="billingHistoryTitle">Histórico de pagamentos</h3><div id="billingHistoryList"></div></section>
+        <div class="card"><h3>Precisa de ajuda com sua conta?</h3><p class="form-help">Acesse o suporte financeiro para dúvidas sobre sua assinatura.</p><button class="btn ghost" data-goto="support">Acessar suporte ↗</button></div></div>
+    </section>
+
+    <section class="view" id="view-support">
+      <header class="view-head"><div><p class="crumb">Suporte</p><h1 class="support-title"><span data-icon="support"></span>Suporte</h1><p class="view-description">Escolha o assunto para encontrar as opções de suporte.</p></div></header>
+      <div class="page-stack">
+        <div class="support-options" aria-label="Assuntos de suporte">
+          <button type="button" class="support-option" data-support-topic="financial" aria-expanded="false" aria-controls="support-financial"><span class="support-option-icon" data-icon="wallet"></span><span><b>Financeiro</b><small>Cobrança, plano, cartão, nota fiscal e reembolso.</small></span></button>
+          <button type="button" class="support-option" data-support-topic="technical" aria-expanded="false" aria-controls="support-technical"><span class="support-option-icon" data-icon="wrench"></span><span><b>Técnico</b><small>Conexão do WhatsApp, disparos, automações e erros no sistema.</small></span></button>
+        </div>
+        <section class="card support-detail" id="support-financial" aria-labelledby="supportFinancialTitle" hidden>
+          <h3 id="supportFinancialTitle">Suporte financeiro</h3><p class="form-help">Consulte seu plano e as informações da sua assinatura. As dúvidas frequentes sobre a conta estão disponíveis em Ajuda.</p><div class="form-actions"><button class="btn" data-goto="subscription">Consultar assinatura</button><button class="btn ghost" data-goto="help">Acessar ajuda</button></div><p class="inline-note">O canal de contato com a equipe financeira ainda não foi configurado.</p>
+        </section>
+        <section class="card support-detail" id="support-technical" aria-labelledby="supportTechnicalTitle" hidden>
+          <h3 id="supportTechnicalTitle">Suporte técnico</h3><p class="form-help">Revise a conexão com o WhatsApp ou consulte as orientações sobre templates, automações e uso do sistema.</p><div class="form-actions"><button class="btn" data-goto="integrations">Ver integração WhatsApp</button><button class="btn ghost" data-goto="help">Acessar ajuda</button></div><p class="inline-note">O canal de contato com a equipe técnica ainda não foi configurado.</p>
+        </section>
+      </div>
+    </section>
+
+    <section class="view" id="view-help">
+<header class="view-head"><div><p class="crumb">Suporte / Ajuda</p><h1>Como podemos ajudar?</h1><p class="view-description">Encontre orientações e atalhos para organizar seu atendimento.</p></div><div class="head-actions"></div></header>
+      <div class="page-stack"><div class="help-grid"><button class="card help-shortcut" data-goto="contacts"><span data-icon="clients"></span><b>Gerenciar clientes</b><small>Cadastre clientes e acompanhe o histórico das conversas.</small></button><button class="card help-shortcut" data-goto="integrations"><span data-icon="plug"></span><b>Conectar o WhatsApp</b><small>Organize os identificadores da sua Meta API Cloud.</small></button><button class="card help-shortcut" data-goto="members"><span data-icon="clients"></span><b>Organizar a equipe</b><small>Cadastre usuários, departamentos e funções.</small></button></div><div class="card"><h3>Perguntas frequentes</h3><details class="faq-item"><summary>Como cadastrar um novo cliente?</summary><p>Acesse Operação → Clientes → Base de Clientes e clique em Novo Cliente. Informe o nome e o telefone, complete os dados desejados e salve. O cliente também aparecerá nas conversas e no Fluxo de Atendimento.</p></details><details class="faq-item"><summary>Como preparar um envio em massa?</summary><p>Cadastre um rascunho em Sistema → Conexões → Templates. Depois, abra Clientes → Envio em Massa, escolha o template e o público. Você pode salvar a campanha como rascunho. O envio real exige uma conexão ativa com a Meta e um template aprovado.</p></details><details class="faq-item"><summary>Como funciona a Aurora nesta instalação?</summary><p>O laboratório e as conversas usam respostas simuladas localmente. As preferências de IA e gateway podem ser organizadas em Sistema → Conexões → IA e Gateway; a execução real exige a conexão com o provedor.</p></details><details class="faq-item" id="privacyHelp"><summary>Política de Privacidade e armazenamento de dados</summary><p>Nesta versão local, os dados cadastrados pela interface ficam no armazenamento deste navegador. Eles não são compartilhados automaticamente com a equipe. Limpar os dados do site apaga os registros locais. Os identificadores da Meta podem ser salvos, mas tokens e App Secret não são armazenados pela interface. As fontes tipográficas são carregadas pelo Google Fonts. Esta descrição informa o funcionamento da instalação; a política da empresa deve ser definida antes do uso em produção.</p></details><details class="faq-item"><summary>Como expandir ou recolher o menu?</summary><p>Use o botão ao lado da marca JF System CRM. Clique nas setas de Clientes, Integrações, Conexões, Configurações ou Equipe para acessar os submenus. No celular, use Menu na barra superior.</p></details></div></div>
     </section>
 
   </main>
 </div>
 
 <!-- ══════ MODAIS ══════ -->
-<div class="modal" id="modal">
-  <div class="mcard">
-    <div class="mhead"><h3 id="mTitle">—</h3><button class="icon-btn" data-close>✕</button></div>
+<div class="modal" id="modal" aria-hidden="true">
+  <div class="mcard" role="dialog" aria-modal="true" aria-labelledby="mTitle" tabindex="-1">
+    <div class="mhead"><h3 id="mTitle">—</h3><button class="icon-btn" data-close aria-label="Fechar modal">✕</button></div>
     <div class="mbody" id="mb-newchat">
       <div class="search-box" style="margin-bottom:10px"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--dim)" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg><input id="ncSearch" placeholder="Buscar contato…"></div>
       <div id="ncList" style="max-height:300px;overflow-y:auto"></div>
@@ -286,16 +416,46 @@
       </div>
       <div class="mfield"><label>Tipo</label><select class="inp" id="evType"><option value="reuniao">🔵 Reunião</option><option value="followup">🟡 Follow-up</option><option value="entrega">🔴 Entrega / vencimento</option><option value="lead">🟢 Novo lead</option></select></div>
     </div>
+
+    <div class="mbody" id="mb-client"><p class="modal-subtitle">Cadastre os dados do cliente para começar o relacionamento.</p><form id="clientForm">
+      <div class="mfield"><label for="clientName">Nome completo *</label><input class="inp" id="clientName" required maxlength="100" autocomplete="name" placeholder="Ex.: Ana Souza"></div>
+      <div class="field-row"><div class="mfield"><label for="clientPhone">Telefone / WhatsApp *</label><input class="inp" id="clientPhone" type="tel" required maxlength="25" autocomplete="tel" placeholder="+55 11 99999-9999"></div><div class="mfield"><label for="clientEmail">E-mail</label><input class="inp" id="clientEmail" type="email" autocomplete="email" placeholder="cliente@empresa.com"></div></div>
+      <div class="mfield"><label for="clientCompany">Empresa</label><input class="inp" id="clientCompany" maxlength="100" autocomplete="organization" placeholder="Nome da empresa"></div>
+      <div class="field-row"><div class="mfield"><label for="clientStage">Status inicial</label><select class="inp" id="clientStage"></select></div><div class="mfield"><label for="clientTags">Tags <small>(separadas por vírgula)</small></label><input class="inp" id="clientTags" maxlength="200" placeholder="Ex.: novo, indicação"></div></div>
+      <div class="mfield"><label for="clientNote">Observações</label><textarea class="inp" id="clientNote" maxlength="2000" placeholder="Informações úteis para o atendimento"></textarea></div>
+    </form></div>
+    <div class="mbody" id="mb-order"><form id="orderForm">
+      <div class="mfield"><label for="orderTitle">Serviço *</label><input class="inp" id="orderTitle" required maxlength="120" placeholder="Ex.: Instalação e configuração"></div>
+      <div class="mfield"><label for="orderClient">Cliente *</label><select class="inp" id="orderClient" required></select></div>
+      <div class="field-row"><div class="mfield"><label for="orderDue">Prazo</label><input class="inp" id="orderDue" type="date"></div><div class="mfield"><label for="orderValue">Valor (R$)</label><input class="inp" id="orderValue" type="number" min="0" step="0.01" placeholder="0,00"></div></div>
+      <div class="mfield"><label for="orderDescription">Descrição</label><textarea class="inp" id="orderDescription" maxlength="2000" placeholder="Detalhes do serviço"></textarea></div>
+    </form></div>
+    <div class="mbody" id="mb-template"><p class="modal-subtitle">Crie um rascunho. A aprovação na Meta será necessária para enviar campanhas.</p><form id="templateForm">
+      <div class="mfield"><label for="templateName">Nome do template *</label><input class="inp" id="templateName" required maxlength="80" placeholder="Ex.: boas_vindas"></div>
+      <div class="field-row"><div class="mfield"><label for="templateCategory">Categoria</label><select class="inp" id="templateCategory"><option>Utilidade</option><option>Marketing</option><option>Autenticação</option></select></div><div class="mfield"><label for="templateLanguage">Idioma</label><select class="inp" id="templateLanguage"><option value="pt_BR">Português (Brasil)</option><option value="en_US">Inglês</option><option value="es">Espanhol</option></select></div></div>
+      <div class="mfield"><label for="templateContent">Mensagem *</label><textarea class="inp" id="templateContent" required maxlength="1024" rows="6" placeholder="Olá, {{nome}}! Como podemos ajudar?"></textarea></div><p class="inline-note">Use {{nome}} e {{empresa}} para personalizar a prévia com os dados de cada cliente.</p>
+    </form></div>
+    <div class="mbody" id="mb-workflow"><p class="modal-subtitle">Defina a estrutura de uma automação. O workflow será salvo como rascunho.</p><form id="workflowForm">
+      <div class="mfield"><label for="workflowName">Nome *</label><input class="inp" id="workflowName" required maxlength="80" placeholder="Ex.: Boas-vindas e qualificação"></div>
+      <div class="mfield"><label for="workflowTrigger">Quando acontecer</label><select class="inp" id="workflowTrigger"><option>Novo cliente cadastrado</option><option>Mensagem recebida</option><option>Status alterado</option><option>Tag adicionada</option></select></div>
+      <div class="mfield"><label for="workflowAction">Ação desejada</label><select class="inp" id="workflowAction"><option>Direcionar para a Aurora</option><option>Encaminhar para a equipe</option><option>Preparar template</option><option>Criar tarefa de acompanhamento</option></select></div>
+    </form></div>
     <div class="mfoot"><button class="btn ghost" data-close>Cancelar</button><button class="btn" id="mAction">Confirmar</button></div>
   </div>
 </div>
 
 <div id="toastWrap"></div>
 
+<script src="shared/plans.js"></script>
+<script src="js/plans.js"></script>
 <script src="js/data.js"></script>
+<script src="js/service-window.js"></script>
 <script src="js/storage.js"></script>
 <script src="js/ai.js"></script>
 <script src="js/management.js"></script>
+<script src="js/workspace.js"></script>
+<script src="js/navigation.js"></script>
+<script src="js/billing.js"></script>
 <script src="js/app.js"></script>
 </body>
 </html>

@@ -25,10 +25,15 @@ jobs:
         uses: actions/checkout@v6
       - name: Configurar Pages
         uses: actions/configure-pages@v5
+      - name: Preparar apenas os arquivos públicos
+        run: |
+          mkdir -p public-site
+          cp index.html public-site/
+          cp -R css js assets shared public-site/
       - name: Enviar site estático
         uses: actions/upload-pages-artifact@v4
         with:
-          path: .
+          path: public-site
       - name: Publicar
         id: deployment
         uses: actions/deploy-pages@v4

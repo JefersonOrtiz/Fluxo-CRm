@@ -3,32 +3,13 @@ let activeId='c1', activeView='dashboard', filterF='all';
 let calRef=new Date(), selDate=isoLocal(today);
 
 /* ═══════ NAVEGAÇÃO ═══════ */
-function switchView(v){
- activeView=v;
- $$('.view').forEach(x=>x.classList.remove('active'));
- $('#view-'+v).classList.add('active');
- $$('.rail-btn[data-view]').forEach(b=>b.classList.toggle('active',b.dataset.view===v));
- if(v==='chat')scrollBottom();
- if(v==='dashboard')runCounters();
- if(v==='kanban')renderKanban();
- if(v==='calendar')renderCalendar();
- if(v==='contacts')renderContacts();
- if(v==='integrations'||v==='organization'||v==='admin')renderManagement();
-}
-$$('.rail-btn[data-view]').forEach(b=>b.onclick=()=>switchView(b.dataset.view));
-$('#settingsBtn').onclick=()=>{
- const current=getFluxoUserName();
- const name=window.prompt('Qual nome deseja exibir no Fluxo?',current);
- if(name===null)return;
- if(!setFluxoUserName(name)){toast('⚠️','Nome inválido','Informe um nome para exibir no CRM.','coral');return}
- updateUserIdentity();
- toast('✅','Perfil atualizado',`${getFluxoUserName()} será exibido na visão geral.`,'gold');
-};
+// O menu e switchView são definidos em navigation.js.
 document.addEventListener('click',e=>{
  const t=e.target.closest('[data-toast]');if(t)toast('💡','Atenção',t.dataset.toast,'');
  const oc=e.target.closest('[data-open-chat]');if(oc){openChat(oc.dataset.openChat);switchView('chat')}
  const gg=e.target.closest('[data-goto]');if(gg)switchView(gg.dataset.goto);
  const nc=e.target.closest('[data-open-newchat]');if(nc)openModal('newchat');
+ const modal=e.target.closest('[data-open-modal]');if(modal)openModal(modal.dataset.openModal);
  const sw=e.target.closest('.sw[data-sw]');if(sw){sw.classList.toggle('on');toast(sw.classList.contains('on')?'✅':'⏸️','Automação',`${sw.dataset.sw} ${sw.classList.contains('on')?'ativada':'pausada'}.`,sw.classList.contains('on')?'':'gold')}
  const tn=e.target.closest('[data-tone]');if(tn){$$('[data-tone]').forEach(x=>x.classList.remove('on'));tn.classList.add('on');toast('🎭','Tom de voz',`Aurora agora fala em tom ${tn.textContent.toLowerCase()}.`,'gold')}
 });
@@ -40,8 +21,11 @@ function updateUserIdentity(){
  const name=getFluxoUserName();
  const h=new Date().getHours(),g=h<12?'Bom dia':h<18?'Boa tarde':'Boa noite',e=h<12?'☀️':h<18?'🌤️':'🌙';
  $('#greet').textContent=`${g}, ${name} ${e}`;
- const initials=name.split(' ').filter(Boolean).map(part=>part[0]).slice(0,2).join('').toUpperCase();
- const rail=$('#railUser');rail.title=`${name} · online`;rail.innerHTML=`${initials}<i></i>`;
+ const rail=$('#railUser');rail.title=`${name} · online`;renderUserAvatar(rail,name,workspaceData.profile.photo,true);
+ $('#sidebarUserName').textContent=name;$('#popoverUserName').textContent=name;
+ const member=management.members.find(item=>item.email.toLowerCase()===workspaceData.profile.email.toLowerCase());
+ const role=roleById(member?.roleId)?.name||'Usuário';
+ $('#sidebarUserRole').textContent=role;$('#accountRole').textContent=role;
 }
 updateUserIdentity();
 
@@ -54,7 +38,7 @@ function runCounters(){$$('[data-n]').forEach(el=>{const tgt=parseFloat(el.datas
   lb+=`<span>${i%2?'':String(d.getDate()).padStart(2,'0')+'/'+String(d.getMonth()+1).padStart(2,'0')}</span>`});
  $('#bars').innerHTML=h;$('#blab').innerHTML=lb})();
 (function hot(){const hot3=[...contacts].sort((a,b)=>b.value-a.value).slice(0,4);
- $('#hotLeads').innerHTML=hot3.map((c,i)=>`<div class="frow" style="--d:${.5+i*.07}s;cursor:pointer" data-open-chat="${c.id}"><span class="cava" style="${avaStyle(c)};width:36px;height:36px;font-size:11px">${initials(c.name)}</span><div class="ftxt"><b>${c.name}</b> · ${c.company}<small style="display:block;color:var(--dim);font-size:11px">${c.stage}</small></div><span class="ftime" style="color:var(--jade)">${c.value?'R$ '+fmtK(c.value):'novo'}</span></div>`).join('')})();
+ $('#hotLeads').innerHTML=hot3.map((c,i)=>`<div class="frow" style="--d:${.5+i*.07}s;cursor:pointer" data-open-chat="${c.id}"><span class="cava" style="${avaStyle(c)};width:36px;height:36px;font-size:11px">${initials(c.name)}</span><div class="ftxt"><b>${esc(c.name)}</b> · ${esc(c.company)}<small style="display:block;color:var(--dim);font-size:11px">${esc(c.stage)}</small></div><span class="ftime" style="color:var(--jade)">${c.value?'R$ '+fmtK(c.value):'novo'}</span></div>`).join('')})();
 
 /* ═══════ CHAT — LISTA ═══════ */
 function preview(c){const m=c.msgs[c.msgs.length-1];if(!m)return'';if(m.file)return'📄 '+m.file;
@@ -69,7 +53,7 @@ function renderChatList(){
  $('#chatList').innerHTML=list.map(c=>{const m=c.msgs[c.msgs.length-1];
   return `<div class="citem ${c.id===activeId?'on':''}" data-id="${c.id}">
    <span class="cava" style="${avaStyle(c)}">${initials(c.name)}${c.online?'<i class="odot"></i>':''}</span>
-   <div class="cmeta"><div class="crow"><b>${c.name}</b><span class="ctime">${m?m.time:''}</span></div>
+   <div class="cmeta"><div class="crow"><b>${esc(c.name)}</b><span class="ctime">${m?m.time:''}</span></div>
    <div class="crow"><span class="cprev">${preview(c)}</span>${c.fav?'<span class="fstar">★</span>':''}${m&&m.who==='ai'?'<span class="aitag">✦</span>':''}${c.unread?`<span class="ubadge">${c.unread}</span>`:''}</div></div></div>`}).join('')||'<p style="padding:24px;color:var(--dim);text-align:center">Nenhuma conversa encontrada 🔍</p>';
 }
 $('#chatSearch').oninput=renderChatList;
@@ -100,8 +84,48 @@ function hideTyping(){const t=$('#typingRow');if(t)t.remove()}
 function renderConvHead(){const c=byId(activeId);
  $('#chAva').innerHTML=`<span class="cava" style="${avaStyle(c)};width:40px;height:40px">${initials(c.name)}</span>`;
  $('#chName').textContent=c.name+' · '+c.company;
- const sub=$('#chSub');sub.textContent=c.online?'online agora':'visto por último às '+c.lastSeen;sub.className=c.online?'live':'';
- $('#aiSwitch').classList.toggle('on',c.aiOn)}
+ const lastSeen=c.lastSeen||'não disponível';
+ const sub=$('#chSub');sub.textContent=c.online?'Online agora':`Visto por último${/^\d{1,2}:\d{2}$/.test(lastSeen)?' às ':': '}${lastSeen}`;sub.className=c.online?'live':'';
+ $('#chPresence').classList.toggle('online',!!c.online);
+ $('#aiSwitch').classList.toggle('on',c.aiOn);
+ const detailsAction=$('#clientDetailsToggle').getAttribute('aria-expanded')==='true'?'Fechar':'Abrir';
+ $('#clientDetailsToggle').setAttribute('aria-label',`${detailsAction} detalhes de ${c.name}`);
+ renderServiceWindow()}
+
+const serviceWindowDateFormatter=new Intl.DateTimeFormat('pt-BR',{timeZone:'America/Sao_Paulo',day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false});
+let serviceWindowExpiryTimer;
+function renderServiceWindow(){
+ const contact=byId(activeId);if(!contact)return;
+ const state=getCustomerServiceWindow(contact),box=$('#serviceWindow');
+ box.dataset.status=state.status;
+ const labels={open:'Janela de 24h aberta',expired:'Janela de 24h expirada','not-started':'Janela de 24h não iniciada',unavailable:'Janela de 24h expirada'};
+ const label=$('#windowStatus');if(label.textContent!==labels[state.status])label.textContent=labels[state.status];
+ const remaining=$('#windowRemaining');remaining.hidden=state.status!=='open';
+ if(state.status==='open'){
+  const minutes=Math.floor(state.remainingMs/60000),hours=Math.floor(minutes/60);
+  remaining.textContent=minutes<1?'Resta menos de 1 min':`Restam ${hours?hours+'h ':''}${minutes%60}min`;
+ }else remaining.textContent='';
+ const closed=state.status==='expired'||state.status==='unavailable';
+ $('#windowLastMessage').hidden=!closed;
+ const lastMessageTime=$('#windowOpenedAt');
+ lastMessageTime.removeAttribute('datetime');lastMessageTime.textContent='';lastMessageTime.removeAttribute('title');
+ if(closed){
+  if(state.openedAt!==null){lastMessageTime.dateTime=new Date(state.openedAt).toISOString();lastMessageTime.textContent=serviceWindowDateFormatter.format(state.openedAt);lastMessageTime.title='Horário de Brasília'}
+  else{
+   const lastIncoming=[...contact.msgs].reverse().find(message=>message.who==='c');
+   lastMessageTime.textContent=typeof lastIncoming?.time==='string'&&lastIncoming.time.trim()?lastIncoming.time.trim():'Horário não registrado';
+   lastMessageTime.title='Registro do histórico sem data e hora completas.';
+  }
+ }
+ const hints={open:'Cada nova mensagem do cliente renova a janela por 24 horas.',expired:'Para retomar o contato pela API, use um template aprovado.','not-started':'A janela começa quando o cliente envia a primeira mensagem.',unavailable:'O histórico não tem uma data e hora válidas para calcular esta janela.'};
+ $('#windowHint').textContent=hints[state.status];$('#windowTemplates').hidden=!closed;
+ box.title=hints[state.status]+' Horários de Brasília.';
+ clearTimeout(serviceWindowExpiryTimer);
+ if(state.status==='open')serviceWindowExpiryTimer=setTimeout(renderServiceWindow,state.remainingMs+1);
+}
+setInterval(renderServiceWindow,15000);
+document.addEventListener('visibilitychange',()=>{if(!document.hidden)renderServiceWindow()});
+window.addEventListener('focus',renderServiceWindow);
 function renderDetail(){const c=byId(activeId);
  $('#dAva').innerHTML=`<span class="cava" style="${avaStyle(c)};width:52px;height:52px;font-size:16px">${initials(c.name)}</span>`;
  $('#dName').textContent=c.name;$('#dComp').textContent=c.company;$('#dPhone').textContent=c.phone;$('#dMail').textContent=c.mail;
@@ -125,7 +149,7 @@ function syncSend(){const mic=!inp.value.trim();sendBtn.classList.toggle('mic',m
 syncSend();inp.addEventListener('input',syncSend);
 
 function sendMessage(txt){const c=byId(activeId);const text=(txt!==undefined?txt:inp.value).trim();if(!text)return;
- const m={id:mid(),who:'me',text,time:nowT(),st:'sent'};c.msgs.push(m);c.ts=Date.now();
+ const m={id:mid(),who:'me',text,time:nowT(),sentAt:new Date().toISOString(),st:'sent'};c.msgs.push(m);c.ts=Date.now();
  appendMsg(m);inp.value='';syncSend();renderChatList();
  setTimeout(()=>setTick(m,'delivered'),700);
  if(Math.random()<.65)setTimeout(()=>flowIncoming(c,pick(REPLIES)),1700+Math.random()*1800);
@@ -133,8 +157,9 @@ function sendMessage(txt){const c=byId(activeId);const text=(txt!==undefined?txt
 function flowIncoming(c,text){
  if(chatVisible()&&activeId===c.id)showTyping(c,c.name.split(' ')[0]+' está digitando…');
  setTimeout(()=>{pushIncoming(c,text);aiRespond(c,text)},1000+Math.random()*900)}
-function pushIncoming(c,text,ai=false){const m={id:mid(),who:ai?'ai':'c',text,time:nowT(),st:''};
+function pushIncoming(c,text,ai=false){const m={id:mid(),who:ai?'ai':'c',text,time:nowT(),sentAt:new Date().toISOString(),st:''};
  c.msgs.push(m);c.ts=Date.now();
+ persistCrm();if(activeId===c.id)renderServiceWindow();
  if(chatVisible()&&activeId===c.id){hideTyping();appendMsg(m);markRead(c);renderChatList()}
  else{c.unread++;toast(ai?'✦':'💬',c.name,(ai?'Aurora respondeu: ':'')+text,'gold');renderChatList();railBadge()}}
 function aiRespond(c,src){if(!c.aiOn)return;
@@ -142,7 +167,7 @@ function aiRespond(c,src){if(!c.aiOn)return;
   setTimeout(()=>{pushIncoming(c,kbReply(src),true);if(activeId===c.id)updateSuggestions(c)},1200+Math.random()*1300)},650)}
 sendBtn.onclick=()=>{if(!inp.value.trim()){toast('🎙️','Mensagem de voz','Gravação de áudio simulada nesta demo.','');return}sendMessage()};
 inp.addEventListener('keydown',e=>{if(e.key==='Enter')sendMessage()});
-$('#attachBtn').onclick=()=>{const c=byId(activeId);const m={id:mid(),who:'me',file:'proposta-fluxo.pdf',time:nowT(),st:'sent'};
+$('#attachBtn').onclick=()=>{const c=byId(activeId);const m={id:mid(),who:'me',file:'proposta-jf-system-crm.pdf',time:nowT(),sentAt:new Date().toISOString(),st:'sent'};
  c.msgs.push(m);c.ts=Date.now();appendMsg(m);renderChatList();setTimeout(()=>setTick(m,'read'),1800)};
 
 /* emoji picker */
@@ -154,10 +179,21 @@ document.addEventListener('click',e=>{if(!e.target.closest('#emojiPop')&&!e.targ
 /* header / painel de detalhes */
 $('#aiSwitch').onclick=()=>{const c=byId(activeId);c.aiOn=!c.aiOn;$('#aiSwitch').classList.toggle('on',c.aiOn);
  toast(c.aiOn?'✦':'⏸️','Aurora',c.aiOn?'IA ativada nesta conversa — respostas automáticas ligadas.':'IA pausada — você assume o atendimento.',c.aiOn?'gold':'')};
-$('#detailBtn').onclick=()=>{const sh=$('#chatShell');if(innerWidth>1350)sh.classList.toggle('no-detail');else sh.classList.toggle('show-detail')};
-$('#detailBtn').classList.add('on');
-$$('[data-back]').forEach(b=>b.onclick=()=>$('#chatShell').classList.remove('conv-open'));
-$('#stageSel').innerHTML=STAGES.map(s=>`<option>${s}</option>`).join('');
+function setClientDetailsOpen(open,restoreFocus=false){
+ const shell=$('#chatShell'),toggle=$('#clientDetailsToggle');
+ shell.classList.toggle('no-detail',!open);shell.classList.toggle('show-detail',open);
+ $('#detailPane').hidden=!open;$('#detailBackdrop').hidden=!open;
+ toggle.setAttribute('aria-expanded',String(open));
+ const action=open?'Fechar':'Abrir';toggle.title=`${action} detalhes do cliente`;toggle.setAttribute('aria-label',`${action} detalhes de ${byId(activeId).name}`);
+ if(open){renderDetail();$('#closeClientDetails').focus({preventScroll:true})}
+ else if(restoreFocus)toggle.focus({preventScroll:true});
+}
+$('#clientDetailsToggle').onclick=()=>setClientDetailsOpen($('#detailPane').hidden);
+$('#closeClientDetails').onclick=()=>setClientDetailsOpen(false,true);
+$('#detailBackdrop').onclick=()=>setClientDetailsOpen(false,true);
+document.addEventListener('keydown',event=>{if(event.key==='Escape'&&!$('#modal').classList.contains('open')&&!$('#detailPane').hidden)setClientDetailsOpen(false,true)});
+$$('[data-back]').forEach(b=>b.onclick=()=>{setClientDetailsOpen(false);$('#chatShell').classList.remove('conv-open')});
+$('#stageSel').innerHTML=STAGES.map(s=>`<option>${esc(s)}</option>`).join('');
 $('#stageSel').onchange=e=>{const c=byId(activeId);c.stage=e.target.value;renderKanban();toast('🎯','Funil atualizado',`${c.name} agora está em “${c.stage}”.`)};
 $('#tagInput').addEventListener('keydown',e=>{if(e.key==='Enter'&&e.target.value.trim()){byId(activeId).tags.push(e.target.value.trim());e.target.value='';renderDetail();toast('🏷','Tag adicionada','Salva no perfil do cliente.')}});
 $('#notesBox').addEventListener('change',e=>{byId(activeId).note=e.target.value;toast('📝','Nota salva','Anotação vinculada ao contato.')});
@@ -171,9 +207,9 @@ $$('.qact').forEach(b=>b.onclick=()=>{const c=byId(activeId),a=b.dataset.act;
 /* ═══════ KANBAN ═══════ */
 function renderKanban(){const bd=$('#board');
  bd.innerHTML=STAGES.map(s=>{const cs=contacts.filter(c=>c.stage===s);const sum=cs.reduce((a,c)=>a+c.value,0);
-  return `<div class="kcol"><div class="khead"><span class="kdot" style="background:${SCOLOR[s]}"></span><b>${s}</b><span class="kcount">${cs.length}</span><span class="ksum">R$ ${fmtK(sum)}</span></div>
-  <div class="kbody" data-stage="${s}">${cs.map(c=>`<div class="kcard" draggable="true" data-id="${c.id}">
-    <div class="krow"><span class="kava" style="${avaStyle(c)}">${initials(c.name)}</span><div><b>${c.name}</b><small>${c.company}</small></div></div>
+  return `<div class="kcol"><div class="khead"><span class="kdot" style="background:${SCOLOR[s]}"></span><b>${esc(s)}</b><span class="kcount">${cs.length}</span><span class="ksum">R$ ${fmtK(sum)}</span></div>
+  <div class="kbody" data-stage="${esc(s)}">${cs.map(c=>`<div class="kcard" draggable="true" data-id="${c.id}">
+    <div class="krow"><span class="kava" style="${avaStyle(c)}">${initials(c.name)}</span><div><b>${esc(c.name)}</b><small>${esc(c.company)}</small></div></div>
     <div class="krow kb"><span class="kval">${c.value?'R$ '+fmtK(c.value):'—'}</span><span class="kdays">${c.days}d no estágio</span></div>
     <div class="ktags">${c.tags.slice(0,2).map(t=>`<i>${esc(t)}</i>`).join('')}</div></div>`).join('')||'<div class="kempty">Solte cards aqui</div>'}</div></div>`}).join('');
  $('#kanbanTotal').textContent='R$ '+fmtK(contacts.reduce((a,c)=>a+c.value,0));
@@ -206,7 +242,7 @@ function renderDayPanel(){
  $('#dayTitle').innerHTML='📅 '+dt.toLocaleDateString('pt-BR',{weekday:'long',day:'numeric',month:'long'});
  const evs=events.filter(e=>e.d===selDate).sort((a,b)=>a.t.localeCompare(b.t));
  $('#dayList').innerHTML=evs.map(e=>{const c=e.cid?byId(e.cid):null;
-  return `<div class="day-item"><span class="dtime">${e.t}</span><div><div class="dtit"><i style="display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:7px" class="dot-${e.type==='reuniao'?'sky':e.type}"></i>${esc(e.title)}</div>${c?`<div class="dcon">👤 ${c.name} · ${c.company}</div>`:''}</div></div>`}).join('')||'<p style="color:var(--dim);padding:14px 0;font-size:13px">Nenhum compromisso — dia livre 🌿</p>'}
+  return `<div class="day-item"><span class="dtime">${e.t}</span><div><div class="dtit"><i style="display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:7px" class="dot-${e.type==='reuniao'?'sky':e.type}"></i>${esc(e.title)}</div>${c?`<div class="dcon">👤 ${esc(c.name)} · ${esc(c.company)}</div>`:''}</div></div>`}).join('')||'<p style="color:var(--dim);padding:14px 0;font-size:13px">Nenhum compromisso — dia livre 🌿</p>'}
 $('#calGrid').addEventListener('click',e=>{const c=e.target.closest('.ccell[data-d]');if(c){selDate=c.dataset.d;renderCalendar()}});
 $('#calPrev').onclick=()=>{calRef.setMonth(calRef.getMonth()-1);renderCalendar()};
 $('#calNext').onclick=()=>{calRef.setMonth(calRef.getMonth()+1);renderCalendar()};
@@ -215,19 +251,20 @@ $('#newEventBtn').onclick=()=>openModal('event');
 
 /* ═══════ CONTATOS ═══════ */
 function renderContacts(){const q=($('#ctSearch').value||'').toLowerCase();
- const list=contacts.filter(c=>(c.name+c.company+c.phone).toLowerCase().includes(q));
+ const list=contacts.filter(c=>(c.name+' '+c.company+' '+c.phone+' '+c.mail).toLowerCase().includes(q));
+ $('#clientCount').textContent=contacts.length;
  $('#ctBody').innerHTML=list.map(c=>`<tr data-id="${c.id}">
-  <td><div style="display:flex;gap:11px;align-items:center"><span class="cava" style="${avaStyle(c)};width:34px;height:34px;font-size:11px">${initials(c.name)}</span><div><b style="font-weight:600">${c.name}</b><small style="display:block;color:var(--dim)">${c.company}</small></div></div></td>
-  <td class="mono" style="font-size:12px;color:var(--mut)">${c.phone}</td>
-  <td><span class="stbadge" style="background:${STBG[c.stage]};color:${SCOLOR[c.stage]}">${c.stage}</span></td>
+  <td><div style="display:flex;gap:11px;align-items:center"><span class="cava" style="${avaStyle(c)};width:34px;height:34px;font-size:11px">${initials(c.name)}</span><div><b style="font-weight:600">${esc(c.name)}</b><small style="display:block;color:var(--dim)">${esc(c.company)}</small></div></div></td>
+  <td class="mono" style="font-size:12px;color:var(--mut)">${esc(c.phone)}</td>
+  <td><span class="stbadge" style="background:${STBG[c.stage]};color:${SCOLOR[c.stage]}">${esc(c.stage)}</span></td>
   <td class="mono" style="color:var(--jade);font-weight:600">${c.value?'R$ '+fmtK(c.value):'—'}</td>
   <td>${c.tags.slice(0,2).map(t=>`<span class="tag" style="margin-right:4px">${esc(t)}</span>`).join('')}</td>
-  <td><span class="ia-dot" style="background:${c.aiOn?'var(--gold)':'var(--dim)'}"></span>${c.aiOn?'Aurora on':'manual'}</td></tr>`).join('')}
+  <td><span class="ia-dot" style="background:${c.aiOn?'var(--gold)':'var(--dim)'}"></span>${c.aiOn?'Aurora on':'manual'}</td></tr>`).join('')||'<tr><td colspan="6" class="table-empty">Nenhum cliente encontrado para esta busca.</td></tr>'}
 $('#ctSearch').oninput=renderContacts;
 $('#ctBody').addEventListener('click',e=>{const tr=e.target.closest('tr');if(tr){openChat(tr.dataset.id);switchView('chat')}});
 
 /* ═══════ VIEW DA IA ═══════ */
-let kbs=['site-fluxo.pdf','tabela-precos.xlsx','faq-atendimento','politica-de-trocas'];
+let kbs=['site-jf-system-crm.pdf','tabela-precos.xlsx','faq-atendimento','politica-de-trocas'];
 function renderKB(){$('#kbBox').innerHTML=kbs.map((k,i)=>`<span class="kbpill">📄 ${esc(k)}<button data-kb="${i}">✕</button></span>`).join('')}
 renderKB();
 $('#kbBox').addEventListener('click',e=>{const b=e.target.closest('[data-kb]');if(b){kbs.splice(b.dataset.kb,1);renderKB();toast('🗑','Documento removido','Aurora não usará mais essa fonte.','coral')}});
@@ -239,24 +276,38 @@ $('#pgBtn').onclick=()=>{const v=$('#pgInput').value.trim();if(!v)return;
 $('#pgInput').addEventListener('keydown',e=>{if(e.key==='Enter')$('#pgBtn').click()});
 
 /* ═══════ MODAIS ═══════ */
-let modalMode='';
-function openModal(mode){modalMode=mode;$$('.mbody').forEach(b=>b.classList.remove('open'));
+let modalMode='',modalReturnFocus=null;
+function openModal(mode){modalMode=mode;modalReturnFocus=document.activeElement;$$('.mbody').forEach(b=>b.classList.remove('open'));
+ const modes={client:['Novo Cliente','Salvar cliente'],order:['Nova ordem de serviço','Criar ordem'],template:['Novo template','Salvar rascunho'],workflow:['Novo workflow','Salvar rascunho']};
+ $('#mAction').textContent='Confirmar';$('#mAction').hidden=mode==='newchat';
+ if(modes[mode]){prepareWorkspaceModal(mode);$('#mTitle').textContent=modes[mode][0];$('#mAction').textContent=modes[mode][1];$('#mb-'+mode).classList.add('open')}
  if(mode==='newchat'){$('#mTitle').textContent='💬 Nova conversa';$('#mb-newchat').classList.add('open');renderNC()}
  if(mode==='event'){$('#mTitle').textContent='📅 Novo evento';$('#mb-event').classList.add('open');
-  $('#evDate').value=selDate;$('#evContact').innerHTML='<option value="">— nenhum —</option>'+contacts.map(c=>`<option value="${c.id}">${c.name} · ${c.company}</option>`).join('')}
- $('#modal').classList.add('open')}
-function closeModal(){$('#modal').classList.remove('open')}
+  $('#evDate').value=selDate;$('#evContact').innerHTML='<option value="">— nenhum —</option>'+contacts.map(c=>`<option value="${c.id}">${esc(c.name)} · ${esc(c.company)}</option>`).join('')}
+ $('#modal').classList.add('open');$('#modal').setAttribute('aria-hidden','false');
+ $('.app').inert=true;
+ requestAnimationFrame(()=>{$('#modal .mbody.open input, #modal .mbody.open select')?.focus()})}
+function closeModal(){if(!$('#modal').classList.contains('open'))return;$('#modal').classList.remove('open');$('#modal').setAttribute('aria-hidden','true');$('.app').inert=false;modalReturnFocus?.focus()}
 $$('[data-close]').forEach(b=>b.onclick=closeModal);
 $('#modal').addEventListener('click',e=>{if(e.target.id==='modal')closeModal()});
 document.addEventListener('keydown',e=>{if(e.key==='Escape'){closeModal();$('#emojiPop').classList.remove('open')}});
+$('#modal').addEventListener('keydown',e=>{
+ if(e.key!=='Tab')return;
+ const focusable=[...$('#modal').querySelectorAll('button,input,select,textarea,[tabindex="0"]')].filter(el=>!el.disabled&&el.getClientRects().length);
+ const first=focusable[0],last=focusable[focusable.length-1];
+ if(e.shiftKey&&document.activeElement===first){e.preventDefault();last.focus()}
+ else if(!e.shiftKey&&document.activeElement===last){e.preventDefault();first.focus()}
+});
 $('#mAction').onclick=()=>{
+ const forms={client:'clientForm',order:'orderForm',template:'templateForm',workflow:'workflowForm'};
+ if(forms[modalMode]){$('#'+forms[modalMode]).requestSubmit();return}
  if(modalMode==='event'){const t=$('#evTitle').value.trim();if(!t){toast('⚠️','Campo obrigatório','Dê um título ao evento.','coral');return}
   events.push({d:$('#evDate').value||selDate,t:$('#evTime').value||'09:00',title:t,type:$('#evType').value,cid:$('#evContact').value});
   renderCalendar();closeModal();toast('📅','Evento criado',t+' — '+$('#evDate').value)}
  closeModal()};
 function renderNC(){const q=($('#ncSearch').value||'').toLowerCase();
  $('#ncList').innerHTML=contacts.filter(c=>(c.name+c.company).toLowerCase().includes(q)).map(c=>
-  `<div class="ncitem" data-id="${c.id}"><span class="cava" style="${avaStyle(c)};width:38px;height:38px;font-size:12px">${initials(c.name)}</span><div><b>${c.name}</b><small>${c.company} · ${c.phone}</small></div></div>`).join('')}
+  `<div class="ncitem" data-id="${c.id}"><span class="cava" style="${avaStyle(c)};width:38px;height:38px;font-size:12px">${initials(c.name)}</span><div><b>${esc(c.name)}</b><small>${esc(c.company)} · ${esc(c.phone)}</small></div></div>`).join('')}
 $('#ncSearch').oninput=renderNC;
 $('#ncList').addEventListener('click',e=>{const it=e.target.closest('.ncitem');if(it){closeModal();openChat(it.dataset.id);switchView('chat')}});
 
@@ -275,5 +326,5 @@ setTimeout(()=>{pushIncoming(byId('c4'),'Consegue me enviar ainda hoje? 🙏')},
 
 /* ═══════ INIT ═══════ */
 renderChatList();openChat('c1');renderKanban();renderCalendar();renderContacts();runCounters();railBadge();
-if(innerWidth<=1350)$('#chatShell').classList.add('no-detail');
-toast('✦',`Bem-vinda ao Fluxo, ${getFluxoUserName()}!`,'A Aurora está online e respondendo seus clientes automaticamente.','gold');
+switchView(location.hash.slice(1)||'dashboard',true);
+toast('✦',`Bem-vinda ao JF System CRM, ${getFluxoUserName()}!`,'A Aurora está online e respondendo seus clientes automaticamente.','gold');

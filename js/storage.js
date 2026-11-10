@@ -15,7 +15,7 @@ function persistCrm() {
   try {
     localStorage.setItem(FLUXO_STORAGE_KEY, JSON.stringify({ contacts, events }));
   } catch (error) {
-    console.warn('Não foi possível salvar os dados locais do Fluxo.', error);
+    console.warn('Não foi possível salvar os dados locais do JF System CRM.', error);
   }
 }
 
@@ -27,7 +27,7 @@ function restoreCrm() {
     if (Array.isArray(saved.contacts) && saved.contacts.length) contacts = saved.contacts;
     if (Array.isArray(saved.events)) events = saved.events;
   } catch (error) {
-    console.warn('Os dados locais do Fluxo não puderam ser restaurados.', error);
+    console.warn('Os dados locais do JF System CRM não puderam ser restaurados.', error);
   }
 }
 

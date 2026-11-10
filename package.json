@@ -1,11 +1,12 @@
 {
-  "name": "fluxo-crm-local",
+  "name": "jf-system-crm",
   "version": "1.0.0",
   "private": true,
   "type": "module",
   "scripts": {
     "dev": "node --watch server.mjs",
-    "start": "node server.mjs"
+    "start": "node server.mjs",
+    "test": "node --test tests/*.test.mjs"
   },
   "engines": {
     "node": ">=22.5.0"

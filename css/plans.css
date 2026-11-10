@@ -1,0 +1,20 @@
+.pricing-section{padding:8px 0}
+.pricing-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:20px}
+.pricing-heading h2{font:800 25px 'Bricolage Grotesque',sans-serif;letter-spacing:-.4px;margin-bottom:7px}
+.pricing-heading h2 span{color:var(--jade)}
+.pricing-heading p{font-size:12px;color:var(--mut);line-height:1.6}
+.pricing-period{display:inline-flex;align-items:center;padding:7px 13px;border-radius:99px;background:var(--jade-t);border:1px solid rgba(49,227,162,.22);color:var(--jade);font-size:11px;font-weight:700;flex:none}
+.pricing-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}
+.pricing-card{position:relative;padding:25px 22px;background:var(--bg2);border:1px solid var(--line2);border-radius:16px;min-width:0}
+.pricing-card.featured{border-color:rgba(49,227,162,.7);background:linear-gradient(155deg,rgba(49,227,162,.11),rgba(49,227,162,.02)),var(--bg2);box-shadow:0 10px 28px rgba(0,0,0,.12)}
+.pricing-card h3{font:700 21px 'Bricolage Grotesque',sans-serif;margin-bottom:8px}
+.pricing-description{color:var(--mut);font-size:12px;line-height:1.6;min-height:39px;margin-bottom:23px}
+.pricing-users{font-size:11.5px;font-weight:600;color:var(--jade);margin-bottom:12px}
+.pricing-amount{display:flex;align-items:baseline;gap:6px;white-space:nowrap;margin-bottom:17px}
+.pricing-amount>span{font-size:14px;font-weight:700}
+.pricing-amount strong{font:800 clamp(29px,3vw,39px) 'Bricolage Grotesque',sans-serif;letter-spacing:-1.6px}
+.pricing-amount small{font-size:11px;color:var(--mut)}
+.pricing-trial{padding-top:15px;border-top:1px solid var(--line);font-size:12px;color:var(--mut)}
+.pricing-note{font-size:10.5px;color:var(--dim);margin-top:13px;line-height:1.6}
+@media(max-width:1050px){.pricing-grid{grid-template-columns:1fr}.pricing-description{min-height:0;margin-bottom:16px}.pricing-card{padding:23px}.pricing-amount strong{font-size:38px}}
+@media(max-width:700px){.pricing-heading h2{font-size:22px}.pricing-heading{gap:10px}.pricing-period{padding:6px 10px}.pricing-card{padding:22px}}

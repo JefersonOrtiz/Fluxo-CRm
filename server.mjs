@@ -1,10 +1,13 @@
-import { createServer } from 'node:http';
+import { createServer, request as httpRequest } from 'node:http';
+import { request as httpsRequest } from 'node:https';
 import { readFile, mkdir } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { join, extname, normalize, resolve } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
+import './shared/plans.js';
 
 const root = process.cwd();
+if (existsSync(join(root, '.env'))) process.loadEnvFile(join(root, '.env'));
 const port = Number(process.env.PORT || 3000);
 // No Railway, defina DATA_DIR=/data para manter o SQLite no Volume persistente.
 const dataDir = process.env.DATA_DIR ? resolve(process.env.DATA_DIR) : join(root, 'data');
@@ -80,11 +83,31 @@ const readBody = async req => new Promise((resolve, reject) => {
   req.on('end', () => { try { resolve(body ? JSON.parse(body) : {}); } catch { reject(new Error('JSON inválido')); } });
   req.on('error', reject);
 });
-const mime = { '.html': 'text/html; charset=utf-8', '.css': 'text/css; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.json': 'application/json; charset=utf-8', '.svg': 'image/svg+xml' };
+const mime = { '.html': 'text/html; charset=utf-8', '.css': 'text/css; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.json': 'application/json; charset=utf-8', '.svg': 'image/svg+xml', '.jpeg': 'image/jpeg', '.jpg': 'image/jpeg', '.png': 'image/png', '.webp': 'image/webp' };
 
 const server = createServer(async (req, res) => {
   const url = new URL(req.url, `http://${req.headers.host}`);
   try {
+    if (/^\/api\/(billing|auth)\//.test(url.pathname)) {
+      res.setHeader('Cache-Control', 'no-store');
+      const target = new URL(process.env.API_PROXY_URL || 'http://127.0.0.1:3001');
+      target.pathname = url.pathname;
+      target.search = url.search;
+      const upstream = (target.protocol === 'https:' ? httpsRequest : httpRequest)(target, {
+        method: req.method, headers: { ...req.headers, host: target.host }, timeout: 20_000,
+      }, upstreamResponse => {
+        res.writeHead(upstreamResponse.statusCode, upstreamResponse.headers);
+        upstreamResponse.pipe(res);
+      });
+      upstream.on('timeout', () => upstream.destroy());
+      upstream.on('error', () => {
+        if (res.headersSent) return res.destroy();
+        if (url.pathname === '/api/billing/config') return json(res, 200, { enabled: false, publicKey: null, plans: globalThis.JF_CRM_PLANS });
+        json(res, 503, { error: 'O serviço de assinaturas ainda não está disponível nesta instalação.' });
+      });
+      req.pipe(upstream);
+      return;
+    }
     if (url.pathname === '/api/health' && req.method === 'GET') return json(res, 200, { ok: true, database: 'sqlite' });
     if (url.pathname === '/api/contacts' && req.method === 'GET') {
       return json(res, 200, db.prepare('SELECT * FROM contacts ORDER BY updated_at DESC').all());
@@ -113,8 +136,11 @@ const server = createServer(async (req, res) => {
     }
     if (url.pathname === '/api/events' && req.method === 'GET') return json(res, 200, db.prepare('SELECT * FROM events ORDER BY starts_at').all());
 
-    let requested = url.pathname === '/' ? 'index.html.html' : decodeURIComponent(url.pathname).replace(/^\//, '');
+    let requested = url.pathname === '/' ? 'index.html' : decodeURIComponent(url.pathname).replace(/^\//, '');
     requested = normalize(requested).replace(/^([.][.][\\/])+/, '');
+    const publicFile = requested === 'index.html' || requested === 'shared/plans.js'
+      || /^(js\/[a-z0-9-]+\.js|css\/[a-z0-9-]+\.css|assets\/[a-z0-9_/-]+\.(png|webp|jpe?g|svg|ico|woff2?))$/i.test(requested);
+    if (!publicFile) return json(res, 404, { error: 'Não encontrado' });
     let filePath = join(root, requested);
     const legacyFiles = {
       'js/app.js': 'js/app.js.txt',
@@ -140,4 +166,4 @@ server.on('error', error => {
   }
   process.exitCode = 1;
 });
-server.listen(port, () => console.log(`Fluxo CRM em http://localhost:${port}`));
+server.listen(port, () => console.log(`JF System CRM em http://localhost:${port}`));
