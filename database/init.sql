@@ -83,7 +83,24 @@ CREATE TABLE messages (
   sender_type VARCHAR(20) NOT NULL CHECK (sender_type IN ('contact', 'user', 'ai')),
   body TEXT NOT NULL,
   provider_message_id VARCHAR(255),
+  client_message_id VARCHAR(120),
+  status VARCHAR(20) NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'sent', 'delivered', 'read', 'failed')),
   sent_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE events (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  organization_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+  contact_id UUID REFERENCES contacts(id) ON DELETE SET NULL,
+  assigned_user_id UUID REFERENCES users(id) ON DELETE SET NULL,
+  title VARCHAR(200) NOT NULL,
+  type VARCHAR(30) NOT NULL CHECK (type IN ('reuniao', 'followup', 'entrega', 'lead')),
+  start_at TIMESTAMPTZ NOT NULL,
+  end_at TIMESTAMPTZ NOT NULL,
+  timezone VARCHAR(64) NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  CHECK (end_at > start_at)
 );
 
 CREATE TABLE integrations (
@@ -104,3 +121,6 @@ CREATE TABLE integrations (
 CREATE INDEX contacts_org_idx ON contacts(organization_id);
 CREATE INDEX conversations_org_idx ON conversations(organization_id, updated_at DESC);
 CREATE INDEX messages_conversation_idx ON messages(conversation_id, sent_at);
+CREATE UNIQUE INDEX messages_conversation_client_id_idx ON messages(conversation_id, client_message_id) WHERE client_message_id IS NOT NULL;
+CREATE INDEX events_org_start_idx ON events(organization_id, start_at, id);
+CREATE INDEX events_assignee_time_idx ON events(organization_id, assigned_user_id, start_at, end_at);

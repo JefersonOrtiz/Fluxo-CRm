@@ -4,7 +4,9 @@
   "type": "module",
   "scripts": {
     "dev": "node --watch server.mjs",
-    "start": "node server.mjs"
+    "start": "node server.mjs",
+    "test:integration": "node --test --test-concurrency=1 tests/*.integration.test.mjs",
+    "check": "node --check server.mjs && node --check src/config.mjs && node --check src/security.mjs && node --check src/http.mjs && node --check src/migrations.mjs && node --check src/app.mjs && node --check tests/organization.integration.test.mjs"
   },
   "dependencies": {
     "pg": "^8.16.3"
