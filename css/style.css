@@ -40,8 +40,8 @@ html[data-fluxo-mode="api"]:not([data-auth-state="authenticated"]) .app{visibili
 /* ============ RAIL ============ */
 .rail{background:var(--bg1);border-right:1px solid var(--line);display:flex;flex-direction:column;align-items:stretch;padding:16px 12px;gap:6px;z-index:40;overflow:visible;transition:padding .22s ease}
 .brand-lockup{display:flex;align-items:center;gap:10px;margin:0 4px 18px}.brand-name{font:800 15px 'Bricolage Grotesque';line-height:1.05;white-space:nowrap}.brand-name span{display:block;color:var(--jade);font-size:12px;letter-spacing:1.5px}.brand-lockup .logo{margin:0;flex:none}
-.logo{width:44px;height:44px;border-radius:14px;background:linear-gradient(150deg,#1c5a44,#0f3a2c);display:grid;place-items:center;color:var(--jade);margin-bottom:18px;position:relative;box-shadow:0 6px 18px rgba(49,227,162,.22)}
-.logo .pulse{position:absolute;top:-2px;right:-2px;width:10px;height:10px;border-radius:50%;background:var(--gold);animation:pulse 2.2s infinite}
+.logo{width:44px;height:44px;display:grid;place-items:center;flex:none}
+.logo img{display:block;width:44px;height:44px;object-fit:contain}
 .rail-btn{width:100%;height:46px;border-radius:13px;display:flex;align-items:center;gap:12px;padding:0 13px;color:var(--mut);position:relative;transition:.18s;margin:2px 0}
 .rail-btn:hover{background:var(--bg3);color:var(--txt);transform:translateY(-1px)}
 .rail-btn.active{background:var(--jade-t);color:var(--jade)}
