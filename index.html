@@ -7,9 +7,26 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,600;12..96,700;12..96,800&family=Instrument+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="css/style.css">
+<script src="js/runtime-config.js"></script>
 </head>
 <body>
-<div class="app">
+<section class="auth-gate" id="authGate" aria-labelledby="loginTitle" hidden>
+  <div class="auth-card">
+    <div class="auth-brand"><span class="auth-logo">⚡</span><div><b>Fluxo CRM</b><small>Ambiente conectado</small></div></div>
+    <div><p class="crumb">Acesso seguro</p><h1 id="loginTitle">Entre na sua organização</h1><p class="auth-help">Use a conta criada no bootstrap da API.</p></div>
+    <form id="loginForm">
+      <label>E-mail<input class="inp" id="loginEmail" name="email" type="email" autocomplete="username" required></label>
+      <label>Senha<input class="inp" id="loginPassword" name="password" type="password" autocomplete="current-password" minlength="8" required></label>
+      <p class="auth-error" id="loginError" role="alert" hidden></p>
+      <button class="btn auth-submit" id="loginSubmit" type="submit">Entrar</button>
+    </form>
+    <small class="auth-footnote">A sessão permanece somente nesta aba e é validada pela API ao recarregar.</small>
+  </div>
+</section>
+
+<div class="runtime-notice" id="runtimeNotice" role="status" hidden></div>
+
+<div class="app" id="appShell">
 
   <!-- ══════ MENU LATERAL ══════ -->
   <nav class="rail">
@@ -28,6 +45,7 @@
     <button class="rail-btn" data-view="admin" aria-label="Administração"><span class="rail-emoji">⚙</span><span class="tip">Administração</span></button>
     <div class="rail-spacer"></div>
     <button class="rail-btn" id="settingsBtn"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg><span class="tip">Configurações</span></button>
+    <button class="rail-btn" id="logoutBtn" aria-label="Sair" hidden><span class="rail-emoji">↪</span><span class="tip">Encerrar sessão</span></button>
     <div class="rail-user" id="railUser" title="Marina Duarte · online">MD<i></i></div>
   </nav>
 
@@ -144,7 +162,7 @@
     <section class="view" id="view-kanban">
       <header class="view-head">
         <div><p class="crumb">Conexões</p><h1>Pipeline de vendas</h1></div>
-        <div class="head-actions"><div class="chip-clock">💼 Total no funil · <b id="kanbanTotal">R$ 0</b></div><button class="btn ghost" data-toast="🧲 Lead manual disponível na versão completa">＋ Novo lead</button></div>
+        <div class="head-actions"><div class="chip-clock">💼 Total no funil · <b id="kanbanTotal">R$ 0</b></div><button class="btn ghost" data-open-contact>＋ Novo lead</button></div>
       </header>
       <div class="board" id="board"></div>
     </section>
@@ -227,11 +245,12 @@
     <section class="view" id="view-contacts">
       <header class="view-head">
         <div><p class="crumb">Base de clientes</p><h1>Clientes</h1></div>
-        <div class="head-actions"><div class="search-box" style="margin:0;min-width:260px"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--dim)" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg><input id="ctSearch" placeholder="Filtrar contatos…"></div><button class="btn ghost" data-toast="📥 Importação CSV disponível na versão completa">⇪ Importar</button></div>
+        <div class="head-actions"><div class="search-box" style="margin:0;min-width:220px"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--dim)" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg><input id="ctSearch" placeholder="Buscar contatos…"></div><select class="inp contact-filter" id="ctStage"><option value="">Todas as etapas</option></select><select class="inp contact-filter" id="ctSort"><option value="updatedAt:desc">Atualizados recentemente</option><option value="name:asc">Nome A–Z</option><option value="value:desc">Maior valor</option><option value="createdAt:desc">Mais novos</option></select><button class="btn" data-open-contact>＋ Contato</button></div>
       </header>
       <div class="card table-card">
         <table><thead><tr><th>Cliente</th><th>Telefone</th><th>Estágio</th><th>Valor</th><th>Tags</th><th>IA</th></tr></thead><tbody id="ctBody"></tbody></table>
       </div>
+      <div class="contact-pagination" id="ctPagination"><button class="btn ghost" id="ctPrev">← Anterior</button><span id="ctPageInfo">—</span><button class="btn ghost" id="ctNext">Próxima →</button></div>
     </section>
 
     <section class="view" id="view-integrations">
@@ -239,13 +258,13 @@
       <div class="manage-wrap">
         <div class="card meta-hero"><div class="meta-logo">∞</div><div><h3>WhatsApp Business Platform</h3><p>Conecte o App da Meta à sua conta WhatsApp Business administrada pelo Business Manager.</p></div><span class="secure-label">Credenciais protegidas no backend</span></div>
         <div class="manage-grid">
-          <div class="card"><h3>Configuração do App Meta</h3><p class="form-help">Informe os identificadores do seu App e da sua BM. Tokens e App Secret nunca são gravados nesta versão estática.</p>
+          <div class="card"><h3>Configuração do App Meta</h3><p class="form-help">Informe os identificadores do seu App e da sua BM. Tokens e App Secret nunca são gravados no navegador; no modo API, são enviados ao backend cifrado.</p>
             <div class="form-grid"><label>Meta App ID<input class="inp" id="metaAppId" placeholder="Ex.: 123456789012345"></label><label>Business Manager ID<input class="inp" id="metaBusinessId" placeholder="ID da sua BM"></label><label>WhatsApp Phone Number ID<input class="inp" id="metaPhoneId" placeholder="ID do número conectado"></label><label>WABA ID<input class="inp" id="metaWabaId" placeholder="WhatsApp Business Account ID"></label></div>
             <label>Token de acesso temporário<input class="inp" id="metaAccessToken" type="password" autocomplete="off" placeholder="Cole apenas para validar no backend"></label>
             <label>App Secret<input class="inp" id="metaAppSecret" type="password" autocomplete="off" placeholder="Nunca será salvo no navegador"></label>
             <div class="form-actions"><button class="btn" id="saveMetaConfig">Salvar identificadores</button><button class="btn ghost" id="testMetaConfig">Validar configuração</button></div>
           </div>
-          <div class="card"><h3>Checklist de conexão</h3><ol class="checklist"><li><span>1</span>Crie um App do tipo <b>Business</b> no Meta for Developers.</li><li><span>2</span>Adicione o produto <b>WhatsApp</b> e vincule a Business Manager.</li><li><span>3</span>Cadastre um número, copie o Phone Number ID e o WABA ID.</li><li><span>4</span>Configure no backend o webhook para mensagens e status.</li></ol><div class="webhook-box"><small>URL do webhook (quando houver backend)</small><code id="webhookUrl">/api/meta/webhook</code></div><a class="btn ghost external-btn" href="https://developers.facebook.com/apps/" target="_blank" rel="noreferrer">Abrir Meta for Developers ↗</a></div>
+          <div class="card"><h3>Checklist de conexão</h3><ol class="checklist"><li><span>1</span>Crie um App do tipo <b>Business</b> no Meta for Developers.</li><li><span>2</span>Adicione o produto <b>WhatsApp</b> e vincule a Business Manager.</li><li><span>3</span>Cadastre um número, copie o Phone Number ID e o WABA ID.</li><li><span>4</span>Configure no backend o webhook para mensagens e status.</li></ol><div class="webhook-box"><small>URL do webhook (quando houver backend)</small><code id="webhookUrl">/api/webhooks/meta</code></div><a class="btn ghost external-btn" href="https://developers.facebook.com/apps/" target="_blank" rel="noreferrer">Abrir Meta for Developers ↗</a></div>
         </div>
         <div class="notice">⚠️ GitHub Pages é estático: ele não pode guardar App Secret nem receber webhooks da Meta. Para conectar de verdade, use um backend com variáveis de ambiente e HTTPS.</div>
       </div>
@@ -257,11 +276,11 @@
     </section>
 
     <section class="view" id="view-admin">
-      <header class="view-head"><div><p class="crumb">Controle da empresa</p><h1>Administração</h1></div><div class="head-actions"><span class="secure-label">Dados salvos neste navegador</span></div></header>
+      <header class="view-head"><div><p class="crumb">Controle da empresa</p><h1>Administração</h1></div><div class="head-actions"><span class="secure-label" id="managementState">Carregando…</span></div></header>
       <div class="manage-wrap admin-grid">
         <div class="card"><h3>Novo setor</h3><form id="departmentForm" class="compact-form"><input class="inp" id="departmentName" required placeholder="Ex.: Sucesso do Cliente"><button class="btn">Adicionar setor</button></form><div id="adminDepartmentList" class="mini-list"></div></div>
-        <div class="card"><h3>Novo colaborador</h3><form id="memberForm" class="form-grid"><label>Nome<input class="inp" id="memberName" required placeholder="Nome completo"></label><label>E-mail<input class="inp" id="memberEmail" type="email" required placeholder="nome@empresa.com"></label><label>Setor<select class="inp" id="memberDepartment"></select></label><label>Privilégio<select class="inp" id="memberRole"></select></label><button class="btn">Cadastrar colaborador</button></form></div>
-        <div class="card"><h3>Privilégios</h3><div id="roleList" class="role-list"></div><form id="roleForm" class="compact-form"><input class="inp" id="roleName" required placeholder="Novo privilégio"><button class="btn ghost">Adicionar</button></form></div>
+        <div class="card"><h3>Novo colaborador</h3><form id="memberForm" class="form-grid"><label>Nome<input class="inp" id="memberName" required maxlength="120" placeholder="Nome completo"></label><label>E-mail<input class="inp" id="memberEmail" type="email" required maxlength="255" placeholder="nome@empresa.com"></label><label>Senha temporária<input class="inp" id="memberPassword" type="password" minlength="8" maxlength="128" autocomplete="new-password" placeholder="Mínimo de 8 caracteres"></label><label>Setor<select class="inp" id="memberDepartment"></select></label><label>Privilégio<select class="inp" id="memberRole"></select></label><button class="btn">Cadastrar colaborador</button></form></div>
+        <div class="card"><h3>Privilégios</h3><div id="roleList" class="role-list"></div><form id="roleForm" class="role-form"><input class="inp" id="roleName" required maxlength="80" placeholder="Nome do privilégio"><input class="inp" id="roleDescription" maxlength="500" placeholder="Descrição"><fieldset><legend>Permissões</legend><label><input type="checkbox" name="rolePermission" value="organization:write"> Setores e tags</label><label><input type="checkbox" name="rolePermission" value="contacts:write"> Contatos e funil</label><label><input type="checkbox" name="rolePermission" value="conversations:write"> Conversas e atribuição</label><label><input type="checkbox" name="rolePermission" value="messages:write"> Envio de mensagens</label><label><input type="checkbox" name="rolePermission" value="events:write"> Agenda</label><label><input type="checkbox" name="rolePermission" value="members:write"> Colaboradores</label><label><input type="checkbox" name="rolePermission" value="roles:write"> Privilégios</label><label><input type="checkbox" name="rolePermission" value="integrations:write"> Integrações</label></fieldset><button class="btn ghost">Adicionar privilégio</button></form></div>
         <div class="card"><h3>Tags de clientes</h3><p class="form-help">Use tags para segmentar clientes e automatizações.</p><div id="adminTagList" class="tagbox"></div><form id="tagForm" class="compact-form"><input class="inp" id="adminTagName" required placeholder="Ex.: cliente VIP"><button class="btn ghost">Adicionar</button></form></div>
       </div>
     </section>
@@ -281,10 +300,18 @@
       <div class="mfield"><label>Título</label><input class="inp" id="evTitle" placeholder="Ex.: Call de proposta"></div>
       <div class="mfield"><label>Contato relacionado</label><select class="inp" id="evContact"></select></div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
-        <div class="mfield"><label>Data</label><input class="inp" type="date" id="evDate"></div>
-        <div class="mfield"><label>Hora</label><input class="inp" type="time" id="evTime" value="10:00"></div>
+        <div class="mfield"><label>Data inicial</label><input class="inp" type="date" id="evDate"></div>
+        <div class="mfield"><label>Hora inicial</label><input class="inp" type="time" id="evTime" value="10:00"></div>
+        <div class="mfield"><label>Data final</label><input class="inp" type="date" id="evEndDate"></div>
+        <div class="mfield"><label>Hora final</label><input class="inp" type="time" id="evEndTime" value="11:00"></div>
       </div>
       <div class="mfield"><label>Tipo</label><select class="inp" id="evType"><option value="reuniao">🔵 Reunião</option><option value="followup">🟡 Follow-up</option><option value="entrega">🔴 Entrega / vencimento</option><option value="lead">🟢 Novo lead</option></select></div>
+      <p class="form-help" id="evTimezoneHelp"></p><button class="btn ghost danger" id="evDelete" type="button" hidden>Excluir evento</button>
+    </div>
+    <div class="mbody" id="mb-contact">
+      <div class="form-grid"><label>Nome<input class="inp" id="contactName" maxlength="160" required></label><label>Empresa<input class="inp" id="contactCompany" maxlength="160"></label><label>Telefone<input class="inp" id="contactPhone" maxlength="40"></label><label>E-mail<input class="inp" id="contactEmail" type="email" maxlength="255"></label><label>Etapa<select class="inp" id="contactStage"></select></label><label>Valor estimado (R$)<input class="inp" id="contactValue" type="number" min="0" step="0.01" value="0"></label></div>
+      <div class="mfield"><label>Tags</label><div class="contact-tag-options" id="contactTagOptions"></div></div>
+      <p class="form-help">Alterações concorrentes são detectadas antes de salvar.</p>
     </div>
     <div class="mfoot"><button class="btn ghost" data-close>Cancelar</button><button class="btn" id="mAction">Confirmar</button></div>
   </div>
@@ -292,10 +319,15 @@
 
 <div id="toastWrap"></div>
 
+<script src="js/api.js"></script>
 <script src="js/data.js"></script>
 <script src="js/storage.js"></script>
 <script src="js/ai.js"></script>
 <script src="js/management.js"></script>
+<script src="js/contacts.js"></script>
+<script src="js/conversations.js"></script>
+<script src="js/calendar.js"></script>
 <script src="js/app.js"></script>
+<script src="js/auth.js"></script>
 </body>
 </html>

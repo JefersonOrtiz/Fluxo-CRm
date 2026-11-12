@@ -8,7 +8,7 @@ function switchView(v){
  $$('.view').forEach(x=>x.classList.remove('active'));
  $('#view-'+v).classList.add('active');
  $$('.rail-btn[data-view]').forEach(b=>b.classList.toggle('active',b.dataset.view===v));
- if(v==='chat')scrollBottom();
+ if(v==='chat'){if(apiConversationsMode())loadApiConversations();else scrollBottom()}
  if(v==='dashboard')runCounters();
  if(v==='kanban')renderKanban();
  if(v==='calendar')renderCalendar();
@@ -17,6 +17,9 @@ function switchView(v){
 }
 $$('.rail-btn[data-view]').forEach(b=>b.onclick=()=>switchView(b.dataset.view));
 $('#settingsBtn').onclick=()=>{
+ if(window.FluxoRuntime?.mode==='api'){
+  toast('🔐','Perfil gerenciado pela organização','A edição do perfil conectado será disponibilizada pela API.','gold');return
+ }
  const current=getFluxoUserName();
  const name=window.prompt('Qual nome deseja exibir no Fluxo?',current);
  if(name===null)return;
@@ -26,9 +29,10 @@ $('#settingsBtn').onclick=()=>{
 };
 document.addEventListener('click',e=>{
  const t=e.target.closest('[data-toast]');if(t)toast('💡','Atenção',t.dataset.toast,'');
- const oc=e.target.closest('[data-open-chat]');if(oc){openChat(oc.dataset.openChat);switchView('chat')}
+ const oc=e.target.closest('[data-open-chat]');if(oc){if(apiConversationsMode())toast('💡','Resumo demonstrativo','Abra a conversa pela lista conectada.','gold');else{openChat(oc.dataset.openChat);switchView('chat')}}
  const gg=e.target.closest('[data-goto]');if(gg)switchView(gg.dataset.goto);
  const nc=e.target.closest('[data-open-newchat]');if(nc)openModal('newchat');
+ const contact=e.target.closest('[data-open-contact]');if(contact)openModal('contact');
  const sw=e.target.closest('.sw[data-sw]');if(sw){sw.classList.toggle('on');toast(sw.classList.contains('on')?'✅':'⏸️','Automação',`${sw.dataset.sw} ${sw.classList.contains('on')?'ativada':'pausada'}.`,sw.classList.contains('on')?'':'gold')}
  const tn=e.target.closest('[data-tone]');if(tn){$$('[data-tone]').forEach(x=>x.classList.remove('on'));tn.classList.add('on');toast('🎭','Tom de voz',`Aurora agora fala em tom ${tn.textContent.toLowerCase()}.`,'gold')}
 });
@@ -44,6 +48,7 @@ function updateUserIdentity(){
  const rail=$('#railUser');rail.title=`${name} · online`;rail.innerHTML=`${initials}<i></i>`;
 }
 updateUserIdentity();
+window.addEventListener('fluxo:session',updateUserIdentity);
 
 /* ═══════ DASHBOARD ═══════ */
 function runCounters(){$$('[data-n]').forEach(el=>{const tgt=parseFloat(el.dataset.n),dec=+(el.dataset.d||0),t0=performance.now();
@@ -60,6 +65,7 @@ function runCounters(){$$('[data-n]').forEach(el=>{const tgt=parseFloat(el.datas
 function preview(c){const m=c.msgs[c.msgs.length-1];if(!m)return'';if(m.file)return'📄 '+m.file;
  return (m.who==='me'?'Você: ':m.who==='ai'?'✦ ':'')+esc(m.text)}
 function renderChatList(){
+ if(apiConversationsMode())return renderApiConversationList();
  const q=($('#chatSearch').value||'').toLowerCase();
  let list=contacts.filter(c=>(c.name+' '+c.company).toLowerCase().includes(q));
  if(filterF==='unread')list=list.filter(c=>c.unread>0);
@@ -114,7 +120,7 @@ function updateSuggestions(c){const last=[...c.msgs].reverse().find(m=>m.who!=='
  $('#suggBox').innerHTML=suggestionsFor(last&&last.text).map(s=>`<button class="sgt">${esc(s)}</button>`).join('')}
 $('#suggBox').addEventListener('click',e=>{const b=e.target.closest('.sgt');if(b)sendMessage(b.textContent)});
 
-function openChat(id){activeId=id;const c=byId(id);c.unread=0;markRead(c);
+function openChat(id){if(apiConversationsMode())return openApiConversation(id);activeId=id;const c=byId(id);c.unread=0;markRead(c);
  renderChatList();renderConvHead();renderMessages();renderDetail();railBadge()}
 
 /* envio */
@@ -124,7 +130,9 @@ const ICO_MIC='<svg width="18" height="18" viewBox="0 0 24 24" fill="none" strok
 function syncSend(){const mic=!inp.value.trim();sendBtn.classList.toggle('mic',mic);$('#sendIco').innerHTML=mic?ICO_MIC:ICO_SEND}
 syncSend();inp.addEventListener('input',syncSend);
 
-function sendMessage(txt){const c=byId(activeId);const text=(txt!==undefined?txt:inp.value).trim();if(!text)return;
+async function sendMessage(txt){const text=(txt!==undefined?txt:inp.value).trim();if(!text)return;
+ if(apiConversationsMode()){if(await sendApiMessage(text)){inp.value='';syncSend()}return}
+ const c=byId(activeId);
  const m={id:mid(),who:'me',text,time:nowT(),st:'sent'};c.msgs.push(m);c.ts=Date.now();
  appendMsg(m);inp.value='';syncSend();renderChatList();
  setTimeout(()=>setTick(m,'delivered'),700);
@@ -140,9 +148,9 @@ function pushIncoming(c,text,ai=false){const m={id:mid(),who:ai?'ai':'c',text,ti
 function aiRespond(c,src){if(!c.aiOn)return;
  setTimeout(()=>{if(chatVisible()&&activeId===c.id)showTyping(c,'Aurora está respondendo…',true);
   setTimeout(()=>{pushIncoming(c,kbReply(src),true);if(activeId===c.id)updateSuggestions(c)},1200+Math.random()*1300)},650)}
-sendBtn.onclick=()=>{if(!inp.value.trim()){toast('🎙️','Mensagem de voz','Gravação de áudio simulada nesta demo.','');return}sendMessage()};
+sendBtn.onclick=()=>{if(!inp.value.trim()){toast('🎙️','Mensagem de voz',apiConversationsMode()?'Envio de áudio ainda não integrado.':'Gravação de áudio simulada nesta demo.','');return}sendMessage()};
 inp.addEventListener('keydown',e=>{if(e.key==='Enter')sendMessage()});
-$('#attachBtn').onclick=()=>{const c=byId(activeId);const m={id:mid(),who:'me',file:'proposta-fluxo.pdf',time:nowT(),st:'sent'};
+$('#attachBtn').onclick=()=>{if(apiConversationsMode()){toast('📎','Anexos indisponíveis','Persistência de anexos ainda não foi implementada.','gold');return}const c=byId(activeId);const m={id:mid(),who:'me',file:'proposta-fluxo.pdf',time:nowT(),st:'sent'};
  c.msgs.push(m);c.ts=Date.now();appendMsg(m);renderChatList();setTimeout(()=>setTick(m,'read'),1800)};
 
 /* emoji picker */
@@ -152,17 +160,18 @@ $('#emojiPop').addEventListener('click',e=>{const b=e.target.closest('button');i
 document.addEventListener('click',e=>{if(!e.target.closest('#emojiPop')&&!e.target.closest('#emojiBtn'))$('#emojiPop').classList.remove('open')});
 
 /* header / painel de detalhes */
-$('#aiSwitch').onclick=()=>{const c=byId(activeId);c.aiOn=!c.aiOn;$('#aiSwitch').classList.toggle('on',c.aiOn);
+$('#aiSwitch').onclick=()=>{if(apiConversationsMode()){toast('✦','Aurora indisponível','A IA ainda não está integrada às conversas persistidas.','gold');return}const c=byId(activeId);c.aiOn=!c.aiOn;$('#aiSwitch').classList.toggle('on',c.aiOn);
  toast(c.aiOn?'✦':'⏸️','Aurora',c.aiOn?'IA ativada nesta conversa — respostas automáticas ligadas.':'IA pausada — você assume o atendimento.',c.aiOn?'gold':'')};
 $('#detailBtn').onclick=()=>{const sh=$('#chatShell');if(innerWidth>1350)sh.classList.toggle('no-detail');else sh.classList.toggle('show-detail')};
 $('#detailBtn').classList.add('on');
 $$('[data-back]').forEach(b=>b.onclick=()=>$('#chatShell').classList.remove('conv-open'));
 $('#stageSel').innerHTML=STAGES.map(s=>`<option>${s}</option>`).join('');
-$('#stageSel').onchange=e=>{const c=byId(activeId);c.stage=e.target.value;renderKanban();toast('🎯','Funil atualizado',`${c.name} agora está em “${c.stage}”.`)};
-$('#tagInput').addEventListener('keydown',e=>{if(e.key==='Enter'&&e.target.value.trim()){byId(activeId).tags.push(e.target.value.trim());e.target.value='';renderDetail();toast('🏷','Tag adicionada','Salva no perfil do cliente.')}});
-$('#notesBox').addEventListener('change',e=>{byId(activeId).note=e.target.value;toast('📝','Nota salva','Anotação vinculada ao contato.')});
-$('#favBtn').onclick=()=>{const c=byId(activeId);c.fav=!c.fav;renderDetail();renderChatList()};
+$('#stageSel').onchange=e=>{if(apiConversationsMode())return updateActiveApiContactStage(e.target.value);const c=byId(activeId);c.stage=e.target.value;renderKanban();toast('🎯','Funil atualizado',`${c.name} agora está em “${c.stage}”.`)};
+$('#tagInput').addEventListener('keydown',e=>{if(apiConversationsMode())return;if(e.key==='Enter'&&e.target.value.trim()){byId(activeId).tags.push(e.target.value.trim());e.target.value='';renderDetail();toast('🏷','Tag adicionada','Salva no perfil do cliente.')}});
+$('#notesBox').addEventListener('change',e=>{if(apiConversationsMode())return;byId(activeId).note=e.target.value;toast('📝','Nota salva','Anotação vinculada ao contato.')});
+$('#favBtn').onclick=()=>{if(apiConversationsMode())return;const c=byId(activeId);c.fav=!c.fav;renderDetail();renderChatList()};
 $$('.qact').forEach(b=>b.onclick=()=>{const c=byId(activeId),a=b.dataset.act;
+ if(apiConversationsMode()){if(a==='handoff')assignActiveApiConversation();else toast('💡','Ação demonstrativa','Esta ação ainda não está integrada à API.','gold');return}
  if(a==='task')toast('✅','Tarefa criada',`Follow-up com ${c.name} amanhã às 9h.`);
  if(a==='calendar'){openModal('event');$('#evContact').value=c.id;$('#evTitle').value='Follow-up — '+c.name}
  if(a==='win'){c.stage='Fechamento';$('#stageSel').value=c.stage;renderKanban();burst();toast('💰','Venda fechada!',`${c.name} · R$ ${fmtK(c.value||3000)} 🎉`)}
@@ -170,6 +179,7 @@ $$('.qact').forEach(b=>b.onclick=()=>{const c=byId(activeId),a=b.dataset.act;
 
 /* ═══════ KANBAN ═══════ */
 function renderKanban(){const bd=$('#board');
+ if(apiContactsMode())return renderApiKanban();
  bd.innerHTML=STAGES.map(s=>{const cs=contacts.filter(c=>c.stage===s);const sum=cs.reduce((a,c)=>a+c.value,0);
   return `<div class="kcol"><div class="khead"><span class="kdot" style="background:${SCOLOR[s]}"></span><b>${s}</b><span class="kcount">${cs.length}</span><span class="ksum">R$ ${fmtK(sum)}</span></div>
   <div class="kbody" data-stage="${s}">${cs.map(c=>`<div class="kcard" draggable="true" data-id="${c.id}">
@@ -192,6 +202,7 @@ function renderKanban(){const bd=$('#board');
 /* ═══════ CALENDÁRIO ═══════ */
 const DOW=['dom','seg','ter','qua','qui','sex','sáb'];
 function renderCalendar(){
+ if(apiCalendarMode())return renderApiCalendar();
  $('#calTitle').textContent=new Intl.DateTimeFormat('pt-BR',{month:'long',year:'numeric'}).format(calRef);
  const y=calRef.getFullYear(),m=calRef.getMonth();
  const first=new Date(y,m,1).getDay(),days=new Date(y,m+1,0).getDate(),prevD=new Date(y,m,0).getDate();
@@ -202,6 +213,7 @@ function renderCalendar(){
  const tot=first+days;for(let i=0;i<(7-tot%7)%7;i++)h+=`<div class="ccell dim"><span class="cnum">${i+1}</span></div>`;
  $('#calGrid').innerHTML=h;renderDayPanel()}
 function renderDayPanel(){
+ if(apiCalendarMode())return renderApiDayPanel();
  const [y,m,d]=selDate.split('-').map(Number);const dt=new Date(y,m-1,d);
  $('#dayTitle').innerHTML='📅 '+dt.toLocaleDateString('pt-BR',{weekday:'long',day:'numeric',month:'long'});
  const evs=events.filter(e=>e.d===selDate).sort((a,b)=>a.t.localeCompare(b.t));
@@ -214,7 +226,7 @@ $('#calToday').onclick=()=>{calRef=new Date();selDate=isoLocal(new Date());rende
 $('#newEventBtn').onclick=()=>openModal('event');
 
 /* ═══════ CONTATOS ═══════ */
-function renderContacts(){const q=($('#ctSearch').value||'').toLowerCase();
+function renderContacts(){if(apiContactsMode())return renderApiContacts();const q=($('#ctSearch').value||'').toLowerCase();
  const list=contacts.filter(c=>(c.name+c.company+c.phone).toLowerCase().includes(q));
  $('#ctBody').innerHTML=list.map(c=>`<tr data-id="${c.id}">
   <td><div style="display:flex;gap:11px;align-items:center"><span class="cava" style="${avaStyle(c)};width:34px;height:34px;font-size:11px">${initials(c.name)}</span><div><b style="font-weight:600">${c.name}</b><small style="display:block;color:var(--dim)">${c.company}</small></div></div></td>
@@ -223,8 +235,8 @@ function renderContacts(){const q=($('#ctSearch').value||'').toLowerCase();
   <td class="mono" style="color:var(--jade);font-weight:600">${c.value?'R$ '+fmtK(c.value):'—'}</td>
   <td>${c.tags.slice(0,2).map(t=>`<span class="tag" style="margin-right:4px">${esc(t)}</span>`).join('')}</td>
   <td><span class="ia-dot" style="background:${c.aiOn?'var(--gold)':'var(--dim)'}"></span>${c.aiOn?'Aurora on':'manual'}</td></tr>`).join('')}
-$('#ctSearch').oninput=renderContacts;
-$('#ctBody').addEventListener('click',e=>{const tr=e.target.closest('tr');if(tr){openChat(tr.dataset.id);switchView('chat')}});
+$('#ctSearch').addEventListener('input',()=>{if(!apiContactsMode())renderContacts()});
+$('#ctBody').addEventListener('click',e=>{const tr=e.target.closest('tr');if(tr){if(apiContactsMode())openModal('contact',tr.dataset.id);else{openChat(tr.dataset.id);switchView('chat')}}});
 
 /* ═══════ VIEW DA IA ═══════ */
 let kbs=['site-fluxo.pdf','tabela-precos.xlsx','faq-atendimento','politica-de-trocas'];
@@ -240,25 +252,29 @@ $('#pgInput').addEventListener('keydown',e=>{if(e.key==='Enter')$('#pgBtn').clic
 
 /* ═══════ MODAIS ═══════ */
 let modalMode='';
-function openModal(mode){modalMode=mode;$$('.mbody').forEach(b=>b.classList.remove('open'));
+function openModal(mode,id){modalMode=mode;$$('.mbody').forEach(b=>b.classList.remove('open'));
  if(mode==='newchat'){$('#mTitle').textContent='💬 Nova conversa';$('#mb-newchat').classList.add('open');renderNC()}
  if(mode==='event'){$('#mTitle').textContent='📅 Novo evento';$('#mb-event').classList.add('open');
-  $('#evDate').value=selDate;$('#evContact').innerHTML='<option value="">— nenhum —</option>'+contacts.map(c=>`<option value="${c.id}">${c.name} · ${c.company}</option>`).join('')}
+  if(apiCalendarMode())prepareApiEventModal(id);else{$('#evDate').value=selDate;$('#evEndDate').value=selDate;$('#evContact').innerHTML='<option value="">— nenhum —</option>'+contacts.map(c=>`<option value="${c.id}">${c.name} · ${c.company}</option>`).join('')}}
+ if(mode==='contact')prepareContactModal(id);
  $('#modal').classList.add('open')}
 function closeModal(){$('#modal').classList.remove('open')}
 $$('[data-close]').forEach(b=>b.onclick=closeModal);
 $('#modal').addEventListener('click',e=>{if(e.target.id==='modal')closeModal()});
 document.addEventListener('keydown',e=>{if(e.key==='Escape'){closeModal();$('#emojiPop').classList.remove('open')}});
-$('#mAction').onclick=()=>{
+$('#mAction').onclick=async()=>{
+ if(modalMode==='contact'){if(await saveContactModal())closeModal();return}
+ if(modalMode==='event'&&apiCalendarMode()){if(await saveApiEventModal())closeModal();return}
  if(modalMode==='event'){const t=$('#evTitle').value.trim();if(!t){toast('⚠️','Campo obrigatório','Dê um título ao evento.','coral');return}
   events.push({d:$('#evDate').value||selDate,t:$('#evTime').value||'09:00',title:t,type:$('#evType').value,cid:$('#evContact').value});
   renderCalendar();closeModal();toast('📅','Evento criado',t+' — '+$('#evDate').value)}
  closeModal()};
 function renderNC(){const q=($('#ncSearch').value||'').toLowerCase();
+ if(apiConversationsMode())return renderApiNewConversationContacts();
  $('#ncList').innerHTML=contacts.filter(c=>(c.name+c.company).toLowerCase().includes(q)).map(c=>
   `<div class="ncitem" data-id="${c.id}"><span class="cava" style="${avaStyle(c)};width:38px;height:38px;font-size:12px">${initials(c.name)}</span><div><b>${c.name}</b><small>${c.company} · ${c.phone}</small></div></div>`).join('')}
 $('#ncSearch').oninput=renderNC;
-$('#ncList').addEventListener('click',e=>{const it=e.target.closest('.ncitem');if(it){closeModal();openChat(it.dataset.id);switchView('chat')}});
+$('#ncList').addEventListener('click',e=>{const it=e.target.closest('.ncitem');if(it){if(apiConversationsMode())createApiConversation(it.dataset.id);else{closeModal();openChat(it.dataset.id);switchView('chat')}}});
 
 /* ═══════ TOASTS / CONFETE / SIMULAÇÃO ═══════ */
 function toast(ico,title,sub,cls){const t=document.createElement('div');t.className='toast '+(cls||'');
@@ -268,12 +284,12 @@ function burst(){const cols=['#31e3a2','#ffc24b','#ff7d6e','#5ec8ff','#e9f3ed'];
  for(let i=0;i<28;i++){const p=document.createElement('i');p.className='cf';
   p.style.cssText=`left:${Math.random()*100}vw;background:${pick(cols)};animation-delay:${Math.random()*.4}s;transform:rotate(${Math.random()*360}deg)`;
   document.body.appendChild(p);setTimeout(()=>p.remove(),2300)}}
-setInterval(()=>{if(Math.random()<.55){const c=pick(contacts.filter(x=>x.id!==activeId));
+setInterval(()=>{if(apiConversationsMode())return;if(Math.random()<.55){const c=pick(contacts.filter(x=>x.id!==activeId));
  const pool=['Oi! Tudo bem por aí?','Consegue me retornar ainda hoje? 🙏','Vocês têm condição especial pra fechar esse mês?','Passando pra agradecer o atendimento! 💚','Meu sócio aprovou! Quais os próximos passos?'];
  pushIncoming(c,pick(pool));if(c.aiOn)aiRespond(c,c.msgs[c.msgs.length-1].text)}},26000);
-setTimeout(()=>{pushIncoming(byId('c4'),'Consegue me enviar ainda hoje? 🙏')},6000);
+if(!apiConversationsMode())setTimeout(()=>{pushIncoming(byId('c4'),'Consegue me enviar ainda hoje? 🙏')},6000);
 
 /* ═══════ INIT ═══════ */
-renderChatList();openChat('c1');renderKanban();renderCalendar();renderContacts();runCounters();railBadge();
+renderChatList();if(!apiConversationsMode())openChat('c1');renderKanban();renderCalendar();renderContacts();runCounters();railBadge();
 if(innerWidth<=1350)$('#chatShell').classList.add('no-detail');
-toast('✦',`Bem-vinda ao Fluxo, ${getFluxoUserName()}!`,'A Aurora está online e respondendo seus clientes automaticamente.','gold');
+if(window.FLUXO_CONFIG?.mode!=='api')toast('✦',`Bem-vinda ao Fluxo, ${getFluxoUserName()}!`,'A Aurora está online em modo demonstrativo.','gold');

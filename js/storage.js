@@ -3,7 +3,7 @@
 const FLUXO_STORAGE_KEY = 'fluxo-crm:state:v1';
 const FLUXO_USER_NAME_KEY = 'fluxo-crm:user-name';
 
-window.getFluxoUserName = () => localStorage.getItem(FLUXO_USER_NAME_KEY) || 'Marina Duarte';
+window.getFluxoUserName = () => window.FluxoSessionUser?.name || localStorage.getItem(FLUXO_USER_NAME_KEY) || 'Marina Duarte';
 window.setFluxoUserName = name => {
   const value = String(name || '').trim().replace(/\s+/g, ' ').slice(0, 60);
   if (!value) return false;
