@@ -51,9 +51,23 @@
       seen.add(group);
     }
   });
+  const applyNavigation = session => {
+    const mode = root.FluxoRuntime?.mode || root.FLUXO_CONFIG?.mode || 'demo';
+    rail.querySelectorAll('.rail-btn[data-view]').forEach(button => {
+      button.hidden = !root.FluxoNavigationPolicy?.canAccessView(button.dataset.view, session, mode);
+    });
+    rail.querySelectorAll('.rail-section-label').forEach(label => {
+      const next = label.nextElementSibling;
+      label.hidden = !next || next.hidden;
+    });
+    const active = rail.querySelector('.rail-btn[data-view].active');
+    if (active?.hidden && typeof root.switchView === 'function') root.switchView('dashboard');
+  };
+  applyNavigation(null);
   root.addEventListener('fluxo:session', event => {
     const user = event.detail?.user;
     if (user?.name) document.querySelector('#railUser')?.setAttribute('title', `${user.name} · perfil`);
     if (user?.name) document.querySelector('#profileMenuName').textContent = user.name;
+    applyNavigation(event.detail || null);
   });
 })(window);

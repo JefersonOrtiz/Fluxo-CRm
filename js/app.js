@@ -4,6 +4,10 @@ let calRef=new Date(), selDate=isoLocal(today);
 
 /* ═══════ NAVEGAÇÃO ═══════ */
 function switchView(v){
+ if(window.FluxoNavigationPolicy && !window.FluxoNavigationPolicy.canAccessView(v,window.FluxoApi?.getSession?.(),window.FluxoRuntime?.mode||'demo')){
+  toast('⚠️','Acesso restrito','Você não tem permissão para acessar este módulo.','coral');
+  return false;
+ }
  activeView=v;
  document.querySelector('#appShell')?.classList.toggle('sidebar-collapsed',v==='chat');
  $$('.view').forEach(x=>x.classList.remove('active'));
@@ -15,6 +19,7 @@ function switchView(v){
  if(v==='calendar')renderCalendar();
  if(v==='contacts')renderContacts();
  if(v==='integrations'||v==='organization'||v==='admin')renderManagement();
+ return true;
 }
 $$('.rail-btn[data-view]').forEach(b=>b.onclick=()=>switchView(b.dataset.view));
 window.switchView=switchView;
