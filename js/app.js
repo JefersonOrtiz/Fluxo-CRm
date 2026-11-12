@@ -5,6 +5,7 @@ let calRef=new Date(), selDate=isoLocal(today);
 /* ═══════ NAVEGAÇÃO ═══════ */
 function switchView(v){
  activeView=v;
+ document.querySelector('#appShell')?.classList.toggle('sidebar-collapsed',v==='chat');
  $$('.view').forEach(x=>x.classList.remove('active'));
  $('#view-'+v).classList.add('active');
  $$('.rail-btn[data-view]').forEach(b=>b.classList.toggle('active',b.dataset.view===v));
@@ -16,6 +17,7 @@ function switchView(v){
  if(v==='integrations'||v==='organization'||v==='admin')renderManagement();
 }
 $$('.rail-btn[data-view]').forEach(b=>b.onclick=()=>switchView(b.dataset.view));
+window.switchView=switchView;
 $('#settingsBtn').onclick=()=>{
  if(window.FluxoRuntime?.mode==='api'){
   switchView('settings'); window.dispatchEvent(new CustomEvent('fluxo:settings')); return
