@@ -404,3 +404,42 @@ test('recursos organizacionais permanecem isolados e respeitam permissões', asy
   const deletedTag = await api(`/tags/${tagA.body.id}`, { token: state.tokenA, method: 'DELETE' });
   assert.equal(deletedTag.status, 204);
 });
+
+test('consultas administrativas exigem permissões específicas', async () => {
+  const adminMembers = await api('/members', {
+    token: state.tokenA
+  });
+  assert.equal(adminMembers.status, 200);
+  assert.ok(Array.isArray(adminMembers.body));
+
+  const adminRoles = await api('/roles', {
+    token: state.tokenA
+  });
+  assert.equal(adminRoles.status, 200);
+  assert.ok(Array.isArray(adminRoles.body));
+
+  const deniedMembers = await api('/members', {
+    token: state.tokenViewer
+  });
+  assert.equal(deniedMembers.status, 403);
+  assert.equal(deniedMembers.body.code, 'FORBIDDEN');
+
+  const deniedRoles = await api('/roles', {
+    token: state.tokenViewer
+  });
+  assert.equal(deniedRoles.status, 403);
+  assert.equal(deniedRoles.body.code, 'FORBIDDEN');
+});
+
+test('configurações da integração Meta exigem autorização', async () => {
+  const admin = await api('/integrations/meta', {
+    token: state.tokenA
+  });
+  assert.equal(admin.status, 200);
+
+  const denied = await api('/integrations/meta', {
+    token: state.tokenViewer
+  });
+  assert.equal(denied.status, 403);
+  assert.equal(denied.body.code, 'FORBIDDEN');
+});

@@ -125,8 +125,13 @@ async function loadApiManagement() {
   setManagementState('Sincronizando API…');
   try {
     const [departments, members, roles, tags, meta] = await Promise.all([
-      FluxoApi.request('/departments'), FluxoApi.request('/members'), FluxoApi.request('/roles'),
-      FluxoApi.request('/tags'), FluxoApi.request('/integrations/meta')
+      FluxoApi.request('/departments'),
+      can('members:write') ? FluxoApi.request('/members') : Promise.resolve([]),
+      can('roles:write') ? FluxoApi.request('/roles') : Promise.resolve([]),
+      FluxoApi.request('/tags'),
+      can('integrations:write')
+        ? FluxoApi.request('/integrations/meta')
+        : Promise.resolve({ status: 'restricted' })
     ]);
     management = {
       departments,

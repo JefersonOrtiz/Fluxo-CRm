@@ -255,6 +255,7 @@ export function createRequestHandler({ pool, security, config }) {
 
       if (url.pathname === '/api/roles' && request.method === 'GET') {
         const session = auth(request, security);
+        requirePermission(session, 'roles:write');
         const { rows } = await pool.query('SELECT id,name,description,permissions,created_at "createdAt" FROM roles WHERE organization_id=$1 ORDER BY name', [session.organizationId]);
         return json(response, 200, rows);
       }
@@ -281,6 +282,7 @@ export function createRequestHandler({ pool, security, config }) {
 
       if (url.pathname === '/api/members' && request.method === 'GET') {
         const session = auth(request, security);
+        requirePermission(session, 'members:write');
         const { rows } = await pool.query(`SELECT u.id,u.name,u.email,u.active,u.department_id "departmentId",u.role_id "roleId",u.last_seen_at "lastSeenAt",(u.last_seen_at > now() - interval '5 minutes') online,d.name department,r.name role FROM users u LEFT JOIN departments d ON d.id=u.department_id LEFT JOIN roles r ON r.id=u.role_id WHERE u.organization_id=$1 ORDER BY u.name`, [session.organizationId]);
         return json(response, 200, rows);
       }
@@ -697,6 +699,7 @@ export function createRequestHandler({ pool, security, config }) {
 
       if (url.pathname === '/api/integrations/meta' && request.method === 'GET') {
         const session = auth(request, security);
+        requirePermission(session, 'integrations:write');
         const { rows } = await pool.query('SELECT app_id,business_id,waba_id,phone_number_id,status,updated_at FROM integrations WHERE organization_id=$1 AND provider=$2', [session.organizationId, 'meta']);
         return json(response, 200, rows[0] || { status: 'not_configured' });
       }
