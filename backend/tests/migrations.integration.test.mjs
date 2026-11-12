@@ -27,7 +27,7 @@ test('banco novo recebe todas as migrations em ordem', async () => {
   await runMigrations(pool);
   const result = await pool.query('SELECT version FROM schema_migrations ORDER BY version');
   assert.deepEqual(result.rows.map(row => row.version), [
-    '0000_initial_schema.sql', '0001_message_delivery_and_idempotency.sql', '0002_events.sql'
+    '0000_initial_schema.sql', '0001_message_delivery_and_idempotency.sql', '0002_events.sql', '0003_account_security.sql'
   ]);
 });
 
@@ -37,7 +37,7 @@ test('schema consolidado completo registra baseline e aplica somente migrations 
   await runMigrations(pool);
   const result = await pool.query('SELECT version FROM schema_migrations ORDER BY version');
   assert.deepEqual(result.rows.map(row => row.version), [
-    '0000_initial_schema.sql', '0001_message_delivery_and_idempotency.sql', '0002_events.sql'
+    '0000_initial_schema.sql', '0001_message_delivery_and_idempotency.sql', '0002_events.sql', '0003_account_security.sql'
   ]);
 });
 

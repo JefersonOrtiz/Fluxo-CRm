@@ -6,6 +6,8 @@ O projeto segue o formato do Keep a Changelog enquanto não possui versões publ
 
 ### Adicionado
 
+- Tela de configurações com edição de perfil, troca de senha com revogação global de sessões e organização protegida por permissão.
+
 - Governança, instruções de contribuição e política de segurança.
 - ADRs para runtime, persistência, autenticação e segredos.
 - Documentação de arquitetura, dados, configuração, desenvolvimento, testes, deploy, operação e troubleshooting.

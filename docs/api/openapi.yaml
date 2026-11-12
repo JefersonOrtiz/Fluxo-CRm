@@ -91,6 +91,56 @@ paths:
                 properties:
                   user: { $ref: '#/components/schemas/Session' }
         '401': { $ref: '#/components/responses/Unauthorized' }
+  /api/settings:
+    get:
+      tags: [Auth]
+      summary: Retorna perfil e organização da sessão
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200': { description: Configurações permitidas }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /api/settings/profile:
+    patch:
+      tags: [Auth]
+      summary: Atualiza o nome do próprio perfil
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [name], properties: { name: { type: string, maxLength: 120 } } }
+      responses:
+        '200': { description: Perfil atualizado }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /api/settings/password:
+    patch:
+      tags: [Auth]
+      summary: Altera a própria senha e revoga sessões anteriores
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [currentPassword, newPassword], properties: { currentPassword: { type: string, format: password }, newPassword: { type: string, format: password, minLength: 8 } } }
+      responses:
+        '200': { description: Senha alterada }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '429': { description: Tentativas excedidas }
+  /api/organization:
+    patch:
+      tags: [Organization]
+      summary: Atualiza o nome da organização
+      description: Exige `organization:write` ou `*`.
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [name], properties: { name: { type: string, maxLength: 120 } } }
+      responses:
+        '200': { description: Organização atualizada }
+        '403': { $ref: '#/components/responses/Forbidden' }
   /api/departments:
     get:
       tags: [Organization]

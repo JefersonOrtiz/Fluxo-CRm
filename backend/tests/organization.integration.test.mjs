@@ -530,3 +530,39 @@ test('revogação de permissões e desativação invalidam acessos antigos', asy
   assert.equal(disabled.status, 401);
   assert.equal(disabled.body.code, 'UNAUTHORIZED');
 });
+
+test('configurações protegem perfil, senha, sessões e organização', async () => {
+  const account = await insertOrganization(`Config ${suffix}`, `config-${suffix}@example.test`, ['organization:write']);
+  let token = await login(account.email);
+  const settings = await api('/settings', { token });
+  assert.equal(settings.status, 200);
+  assert.equal(settings.body.profile.email, account.email);
+  const profile = await api('/settings/profile', { token, method: 'PATCH', body: { name: 'Nome Atualizado', email: 'nao-alterar@example.test' } });
+  assert.equal(profile.status, 400);
+  const updatedProfile = await api('/settings/profile', { token, method: 'PATCH', body: { name: 'Nome Atualizado' } });
+  assert.equal(updatedProfile.status, 200);
+  const organization = await api('/organization', { token, method: 'PATCH', body: { name: 'Organização Atualizada' } });
+  assert.equal(organization.status, 200);
+  const viewerOrganization = await api('/organization', { token: state.tokenViewer, method: 'PATCH', body: { name: 'Não autorizado' } });
+  assert.equal(viewerOrganization.status, 403);
+  const wrongPassword = await api('/settings/password', { token, method: 'PATCH', body: { currentPassword: 'incorreta', newPassword: `${password}Nova` } });
+  assert.equal(wrongPassword.status, 401);
+  const changed = await api('/settings/password', { token, method: 'PATCH', body: { currentPassword: password, newPassword: `${password}Nova` } });
+  assert.equal(changed.status, 200);
+  const revoked = await api('/auth/me', { token });
+  assert.equal(revoked.status, 401);
+  const relogin = await api('/auth/login', { method: 'POST', body: { email: account.email, password: `${password}Nova` } });
+  assert.equal(relogin.status, 200);
+  token = relogin.body.token;
+  const visible = await api('/settings', { token });
+  assert.equal(visible.status, 200);
+  assert.equal(visible.body.profile.name, 'Nome Atualizado');
+  const rateAccount = await insertOrganization(`Rate ${suffix}`, `rate-${suffix}@example.test`, []);
+  const rateToken = await login(rateAccount.email);
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    const failed = await api('/settings/password', { token: rateToken, method: 'PATCH', body: { currentPassword: 'incorreta', newPassword: `${password}Outra` } });
+    assert.equal(failed.status, 401);
+  }
+  const limited = await api('/settings/password', { token: rateToken, method: 'PATCH', body: { currentPassword: 'incorreta', newPassword: `${password}Outra` } });
+  assert.equal(limited.status, 429);
+});

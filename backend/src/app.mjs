@@ -125,7 +125,8 @@ const userPayload = row => ({
   organizationId: row.organization_id,
   name: row.name,
   role: row.role_name,
-  permissions: row.permissions || []
+  permissions: row.permissions || [],
+  sessionVersion: row.session_version
 });
 
 const auth = async (request, security, pool) => {
@@ -136,7 +137,7 @@ const auth = async (request, security, pool) => {
   }
 
   const { rows } = await pool.query(
-    `SELECT u.id, u.organization_id, u.name,
+    `SELECT u.id, u.organization_id, u.name, u.session_version,
             r.name AS role_name, r.permissions
        FROM users u
        JOIN roles r
@@ -150,6 +151,10 @@ const auth = async (request, security, pool) => {
 
   if (!rows[0]) {
     throw new HttpError(401, 'Sessão inválida ou usuário desativado', 'UNAUTHORIZED');
+  }
+
+  if (Number(token.sessionVersion) !== Number(rows[0].session_version)) {
+    throw new HttpError(401, 'Sessão revogada. Entre novamente.', 'UNAUTHORIZED');
   }
 
   return userPayload(rows[0]);
@@ -259,7 +264,7 @@ export function createRequestHandler({ pool, security, config }) {
           const role = await client.query("INSERT INTO roles(organization_id,name,description,permissions) VALUES($1,'Administrador','Acesso total',$2) RETURNING id,name,permissions", [org.rows[0].id, JSON.stringify(['*'])]);
           const user = await client.query('INSERT INTO users(organization_id,role_id,name,email,password_hash) VALUES($1,$2,$3,$4,$5) RETURNING id,organization_id,name', [org.rows[0].id, role.rows[0].id, name, userEmail, security.passwordHash(password)]);
           await client.query('COMMIT');
-          const payload = { userId: user.rows[0].id, organizationId: user.rows[0].organization_id, name: user.rows[0].name, role: role.rows[0].name, permissions: role.rows[0].permissions };
+          const payload = { userId: user.rows[0].id, organizationId: user.rows[0].organization_id, name: user.rows[0].name, role: role.rows[0].name, permissions: role.rows[0].permissions, sessionVersion: 1 };
           return json(response, 201, { token: security.signToken(payload), user: payload });
         } catch (error) {
           await client.query('ROLLBACK');
@@ -281,6 +286,59 @@ export function createRequestHandler({ pool, security, config }) {
       }
 
       if (url.pathname === '/api/auth/me' && request.method === 'GET') return json(response, 200, { user: await auth(request, security, pool) });
+
+      if (url.pathname === '/api/settings' && request.method === 'GET') {
+        const session = await auth(request, security, pool);
+        const { rows } = await pool.query(`SELECT u.id "userId",u.name,u.email,o.id "organizationId",o.name "organizationName",r.name role,r.permissions
+          FROM users u JOIN organizations o ON o.id=u.organization_id LEFT JOIN roles r ON r.id=u.role_id WHERE u.id=$1 AND u.organization_id=$2`, [session.userId, session.organizationId]);
+        return json(response, 200, { profile: rows[0], canEditOrganization: session.permissions.includes('*') || session.permissions.includes('organization:write') });
+      }
+
+      if (url.pathname === '/api/settings/profile' && request.method === 'PATCH') {
+        const session = await auth(request, security, pool);
+        const body = await parseBody(request);
+        const name = requiredString(body, 'name', { max: 120, label: 'Nome' });
+        if (body.email !== undefined) throw new HttpError(400, 'O e-mail não pode ser alterado nesta versão', 'FIELD_NOT_ALLOWED');
+        const { rows } = await pool.query('UPDATE users SET name=$1 WHERE id=$2 AND organization_id=$3 AND active=true RETURNING id,name,email,session_version', [name, session.userId, session.organizationId]);
+        return json(response, 200, { userId: rows[0].id, name: rows[0].name, email: rows[0].email, sessionVersion: rows[0].session_version });
+      }
+
+      if (url.pathname === '/api/settings/password' && request.method === 'PATCH') {
+        const session = await auth(request, security, pool);
+        const body = await parseBody(request);
+        const currentPassword = requiredString(body, 'currentPassword', { min: 1, max: 128, label: 'Senha atual' });
+        const newPassword = requiredString(body, 'newPassword', { min: 8, max: 128, label: 'Nova senha' });
+        if (currentPassword === newPassword) throw new HttpError(400, 'A nova senha deve ser diferente da atual', 'VALIDATION_ERROR');
+        const client = await pool.connect();
+        try {
+          await client.query('BEGIN');
+          const { rows } = await client.query('SELECT password_hash FROM users WHERE id=$1 AND organization_id=$2 AND active=true FOR UPDATE', [session.userId, session.organizationId]);
+          if (!rows[0]) throw new HttpError(401, 'Sessão inválida', 'UNAUTHORIZED');
+          const attempt = await client.query('SELECT window_started_at,failed_attempts FROM password_change_attempts WHERE user_id=$1 FOR UPDATE', [session.userId]);
+          const row = attempt.rows[0];
+          const withinWindow = row && Date.now() - new Date(row.window_started_at).getTime() < 15 * 60 * 1000;
+          if (withinWindow && row.failed_attempts >= 5) throw new HttpError(429, 'Muitas tentativas. Aguarde alguns minutos.', 'RATE_LIMITED');
+          if (!security.passwordMatches(currentPassword, rows[0].password_hash)) {
+            if (withinWindow) await client.query('UPDATE password_change_attempts SET failed_attempts=failed_attempts+1 WHERE user_id=$1', [session.userId]);
+            else await client.query('INSERT INTO password_change_attempts(user_id,window_started_at,failed_attempts) VALUES($1,now(),1) ON CONFLICT (user_id) DO UPDATE SET window_started_at=now(),failed_attempts=1', [session.userId]);
+            await client.query('COMMIT');
+            throw new HttpError(401, 'Senha atual inválida', 'INVALID_CURRENT_PASSWORD');
+          }
+          await client.query('UPDATE users SET password_hash=$1,session_version=session_version+1 WHERE id=$2', [security.passwordHash(newPassword), session.userId]);
+          await client.query('DELETE FROM password_change_attempts WHERE user_id=$1', [session.userId]);
+          await client.query('COMMIT');
+          return json(response, 200, { revoked: true });
+        } catch (error) { await client.query('ROLLBACK').catch(() => {}); throw error; } finally { client.release(); }
+      }
+
+      if (url.pathname === '/api/organization' && request.method === 'PATCH') {
+        const session = await auth(request, security, pool);
+        requirePermission(session, 'organization:write');
+        const body = await parseBody(request);
+        const name = requiredString(body, 'name', { max: 120, label: 'Organização' });
+        const { rows } = await pool.query('UPDATE organizations SET name=$1 WHERE id=$2 RETURNING id,name', [name, session.organizationId]);
+        return json(response, 200, { organizationId: rows[0].id, organizationName: rows[0].name });
+      }
 
       if (url.pathname === '/api/departments' && request.method === 'GET') {
         const session = await auth(request, security, pool);

@@ -285,6 +285,15 @@
       </div>
     </section>
 
+    <section class="view" id="view-settings">
+      <header class="view-head"><div><p class="crumb">Conta</p><h1>Configurações</h1></div></header>
+      <div class="manage-wrap settings-grid">
+        <div class="card"><h3>Meu perfil</h3><form id="profileSettingsForm" class="form-grid"><label>Nome<input class="inp" id="settingsName" required maxlength="120"></label><label>E-mail<input class="inp" id="settingsEmail" readonly></label><button class="btn">Salvar perfil</button></form></div>
+        <div class="card"><h3>Segurança</h3><form id="passwordSettingsForm" class="form-grid"><label>Senha atual<input class="inp" id="currentPassword" type="password" required autocomplete="current-password"></label><label>Nova senha<input class="inp" id="newPassword" type="password" minlength="8" maxlength="128" required autocomplete="new-password"></label><label>Confirme a nova senha<input class="inp" id="confirmPassword" type="password" minlength="8" maxlength="128" required autocomplete="new-password"></label><button class="btn">Alterar senha</button><p class="form-help">A alteração encerra todas as sessões abertas em outros navegadores.</p></form></div>
+        <div class="card"><h3>Organização</h3><form id="organizationSettingsForm" class="form-grid"><label>Nome da organização<input class="inp" id="settingsOrganizationName" required maxlength="120"></label><button class="btn" id="saveOrganizationSettings">Salvar organização</button><p class="form-help" id="organizationSettingsHelp"></p></form></div>
+      </div>
+    </section>
+
   </main>
 </div>
 
@@ -324,6 +333,7 @@
 <script src="js/storage.js"></script>
 <script src="js/ai.js"></script>
 <script src="js/management.js"></script>
+<script src="js/settings.js"></script>
 <script src="js/contacts.js"></script>
 <script src="js/conversations.js"></script>
 <script src="js/calendar.js"></script>

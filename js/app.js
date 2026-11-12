@@ -18,7 +18,7 @@ function switchView(v){
 $$('.rail-btn[data-view]').forEach(b=>b.onclick=()=>switchView(b.dataset.view));
 $('#settingsBtn').onclick=()=>{
  if(window.FluxoRuntime?.mode==='api'){
-  toast('🔐','Perfil gerenciado pela organização','A edição do perfil conectado será disponibilizada pela API.','gold');return
+  switchView('settings'); window.dispatchEvent(new CustomEvent('fluxo:settings')); return
  }
  const current=getFluxoUserName();
  const name=window.prompt('Qual nome deseja exibir no Fluxo?',current);
