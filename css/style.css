@@ -40,7 +40,7 @@ html[data-fluxo-mode="api"]:not([data-auth-state="authenticated"]) .app{visibili
 /* ============ RAIL ============ */
 .rail{background:var(--bg1);border-right:1px solid var(--line);display:flex;flex-direction:column;align-items:stretch;padding:16px 12px;gap:6px;z-index:40;overflow:visible;transition:padding .22s ease}
 .brand-lockup{display:flex;align-items:center;gap:10px;margin:0 4px 18px}.brand-name{font:800 15px 'Bricolage Grotesque';line-height:1.05;white-space:nowrap}.brand-name span{display:block;color:var(--jade);font-size:12px;letter-spacing:1.5px}.brand-lockup .logo{margin:0;flex:none}
-.logo{width:44px;height:44px;display:grid;place-items:center;flex:none;background:#06100c;border-radius:14px;overflow:hidden}
+.logo{width:52px;height:52px;display:grid;place-items:center;flex:none;background:#06100c;border-radius:14px;overflow:hidden}
 .logo img{display:block;width:44px;height:44px;object-fit:contain}
 .rail-btn{width:100%;height:46px;border-radius:13px;display:flex;align-items:center;gap:12px;padding:0 13px;color:var(--mut);position:relative;transition:.18s;margin:2px 0}
 .rail-btn:hover{background:var(--bg3);color:var(--txt);transform:translateY(-1px)}
