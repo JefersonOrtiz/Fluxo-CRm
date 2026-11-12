@@ -21,14 +21,11 @@
   const profileButton = document.querySelector('#railUser');
   const closeProfileMenu = () => { profileMenu.hidden = true; profileButton.setAttribute('aria-expanded', 'false'); };
   const positionProfileMenu = () => {
-    const rect = profileButton.getBoundingClientRect();
-    const width = Math.min(220, window.innerWidth - 16);
-    const left = Math.max(8, Math.min(rect.right + 8, window.innerWidth - width - 8));
-    const top = Math.max(8, Math.min(rect.top - 8, window.innerHeight - 190));
-    profileMenu.style.width = `${width}px`;
-    profileMenu.style.left = `${left}px`;
-    profileMenu.style.top = `${top}px`;
-    profileMenu.style.bottom = 'auto';
+    profileMenu.style.width = '';
+    profileMenu.style.left = '';
+    profileMenu.style.right = '';
+    profileMenu.style.top = '';
+    profileMenu.style.bottom = '';
   };
   profileButton.addEventListener('click', event => { event.stopPropagation(); profileMenu.hidden = !profileMenu.hidden; if (!profileMenu.hidden) positionProfileMenu(); profileButton.setAttribute('aria-expanded', String(!profileMenu.hidden)); });
   window.addEventListener('resize', () => { if (!profileMenu.hidden) positionProfileMenu(); });

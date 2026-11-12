@@ -47,7 +47,7 @@ function updateUserIdentity(){
  const h=new Date().getHours(),g=h<12?'Bom dia':h<18?'Boa tarde':'Boa noite',e=h<12?'☀️':h<18?'🌤️':'🌙';
  $('#greet').textContent=`${g}, ${name} ${e}`;
  const initials=name.split(' ').filter(Boolean).map(part=>part[0]).slice(0,2).join('').toUpperCase();
- const rail=$('#railUser');rail.title=`${name} · online`;rail.innerHTML=`${initials}<i></i>`;
+ const rail=$('#railUser');rail.title=`${name} · online`;rail.querySelector('.rail-user').innerHTML=`${initials}<i></i>`;$('#sidebarUserName').textContent=name;$('#profileMenuName').textContent=name;
 }
 updateUserIdentity();
 window.addEventListener('fluxo:session',updateUserIdentity);
