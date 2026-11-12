@@ -1,0 +1,17 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import vm from 'node:vm';
+import { readFile } from 'node:fs/promises';
+const source = await readFile(new URL('../js/service-window.js', import.meta.url), 'utf8');
+const context = { globalThis: {} };
+vm.runInNewContext(source, context);
+const calculate = context.globalThis.FluxoServiceWindow.calculateServiceWindow;
+const now = Date.parse('2026-01-10T12:00:00Z');
+test('janela aberta e tempo restante', () => { const r = calculate([{ who: 'c', sentAt: '2026-01-10T10:30:00Z' }], now); assert.equal(r.status, 'open'); assert.equal(r.remainingMs, 22.5 * 60 * 60 * 1000); });
+test('janela expirada', () => assert.equal(calculate([{ who: 'c', sentAt: '2026-01-08T10:00:00Z' }], now).status, 'expired'));
+test('janela não iniciada e indisponível distinguem texto, visual e motivo técnico', () => { const missing = calculate([], now); assert.deepEqual({ text: missing.displayText, visual: missing.visualStatus, reason: missing.reason }, { text: 'Janela não iniciada', visual: 'not-started', reason: 'no-incoming-message' }); const invalid = calculate([{ who: 'c', sentAt: 'não é data' }], now); assert.deepEqual({ text: invalid.displayText, visual: invalid.visualStatus, reason: invalid.reason }, { text: 'Janela não verificada', visual: 'unavailable', reason: 'invalid-timestamp' }); });
+test('mensagem recebida mais recente renova a janela', () => { const r = calculate([{ who: 'c', sentAt: '2026-01-08T10:00:00Z' }, { who: 'c', sentAt: '2026-01-10T11:30:00Z' }], now); assert.equal(r.status, 'open'); assert.equal(r.openedAt, Date.parse('2026-01-10T11:30:00Z')); });
+test('mensagem enviada pela empresa não renova a janela', () => assert.equal(calculate([{ who: 'c', sentAt: '2026-01-08T10:00:00Z' }, { who: 'me', sentAt: '2026-01-10T11:30:00Z' }], now).status, 'expired'));
+test('troca de contato e atualização do relógio são determinísticas', () => { const first = calculate([{ who: 'c', sentAt: '2026-01-10T11:00:00Z' }], now); const second = calculate([{ who: 'c', sentAt: '2026-01-10T08:00:00Z' }], now); assert.notEqual(first.openedAt, second.openedAt); assert.ok(first.remainingMs > second.remainingMs); assert.equal(calculate([{ who: 'c', sentAt: '2026-01-10T11:59:59Z' }], now + 60_000).status, 'open'); });
+test('estados operacionais possuem estado visual explícito', () => { assert.equal(calculate([], now).visualStatus, 'not-started'); assert.equal(calculate([{ who: 'c', sentAt: '2026-01-10T11:00:00Z' }], now).visualStatus, 'open'); assert.equal(calculate([{ who: 'c', sentAt: '2026-01-01T11:00:00Z' }], now).visualStatus, 'expired'); });
+test('estado indisponível com timestamp inválido usa destaque âmbar', () => { const state = calculate([{ who: 'c', sentAt: 'inválido' }], now); assert.equal(state.visualStatus, 'unavailable'); assert.equal(state.reason, 'invalid-timestamp'); assert.equal('#E9B44C', '#E9B44C'); });

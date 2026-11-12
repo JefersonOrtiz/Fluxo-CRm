@@ -93,6 +93,9 @@ function renderApiConversationDetails() {
   $('#chName').textContent = `${contact.name} · ${contact.company || 'Sem empresa'}`;
   $('#chSub').textContent = `${conversation.channel} · ${conversation.assignedUserName || 'sem responsável'}`;
   $('#chSub').className = '';
+  $('#chPresence').classList.remove('online');
+  const service = $('#serviceWindow');
+  if (service) { service.dataset.status = 'unavailable'; service.dataset.reason = 'invalid-timestamp'; $('#windowStatus').dataset.state = 'unavailable'; $('#windowStatus').dataset.reason = 'invalid-timestamp'; $('#windowStatus').textContent = 'Janela não verificada'; $('#windowRemaining').hidden = true; $('#windowLastMessage').hidden = true; $('#windowHint').textContent = 'Horário indisponível'; }
   $('#dAva').innerHTML = `<span class="cava" style="${avaStyle(ui)};width:52px;height:52px;font-size:16px">${initials(contact.name)}</span>`;
   $('#dName').textContent = contact.name;
   $('#dComp').textContent = contact.company || '—';

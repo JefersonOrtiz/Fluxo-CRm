@@ -113,8 +113,19 @@ function hideTyping(){const t=$('#typingRow');if(t)t.remove()}
 function renderConvHead(){const c=byId(activeId);
  $('#chAva').innerHTML=`<span class="cava" style="${avaStyle(c)};width:40px;height:40px">${initials(c.name)}</span>`;
  $('#chName').textContent=c.name+' · '+c.company;
- const sub=$('#chSub');sub.textContent=c.online?'online agora':'visto por último às '+c.lastSeen;sub.className=c.online?'live':'';
+ const sub=$('#chSub');sub.textContent=c.online?'online agora':(c.lastSeen?`visto por último às ${c.lastSeen}`:'presença não disponível');sub.className=c.online?'live':'';$('#chPresence').classList.toggle('online',!!c.online);
+ renderServiceWindow(c);
  $('#aiSwitch').classList.toggle('on',c.aiOn)}
+let serviceWindowTimer;
+function renderServiceWindow(contact=byId(activeId)){
+ const box=$('#serviceWindow');if(!box||!contact)return;
+ clearTimeout(serviceWindowTimer);
+ const state=window.FluxoServiceWindow?.calculateServiceWindow(contact.msgs||[])||{openedAt:null,remainingMs:0,status:'unavailable',reason:'no-incoming-message'};
+ const {openedAt,remainingMs:remaining,visualStatus,status,displayText,reason}=state;box.dataset.status=visualStatus;box.dataset.reason=reason||'';$('#windowStatus').dataset.state=visualStatus;$('#windowStatus').dataset.reason=reason||'';$('#windowStatus').textContent=displayText;$('#windowRemaining').hidden=status!=='open';
+ if(status==='open'){const minutes=Math.max(1,Math.ceil(remaining/60000));$('#windowRemaining').textContent=`Restam ${Math.floor(minutes/60)?`${Math.floor(minutes/60)}h `:''}${minutes%60}min`;serviceWindowTimer=setTimeout(()=>renderServiceWindow(contact),Math.min(remaining+1,60000))}else $('#windowRemaining').textContent='';
+ $('#windowLastMessage').hidden=status==='open'||openedAt===null; if(openedAt!==null){$('#windowOpenedAt').textContent=new Date(openedAt).toLocaleString('pt-BR',{dateStyle:'short',timeStyle:'short'});$('#windowOpenedAt').dateTime=new Date(openedAt).toISOString()}
+ $('#windowHint').textContent=status==='open'?'Cada mensagem do cliente renova a janela por 24 horas.':status==='expired'?'Use um template aprovado para retomar o contato.':reason==='no-incoming-message'?'Nenhuma mensagem recebida do cliente.':'Horário indisponível';
+}
 function renderDetail(){const c=byId(activeId);
  $('#dAva').innerHTML=`<span class="cava" style="${avaStyle(c)};width:52px;height:52px;font-size:16px">${initials(c.name)}</span>`;
  $('#dName').textContent=c.name;$('#dComp').textContent=c.company;$('#dPhone').textContent=c.phone;$('#dMail').textContent=c.mail;
@@ -169,9 +180,12 @@ document.addEventListener('click',e=>{if(!e.target.closest('#emojiPop')&&!e.targ
 /* header / painel de detalhes */
 $('#aiSwitch').onclick=()=>{if(apiConversationsMode()){toast('✦','Aurora indisponível','A IA ainda não está integrada às conversas persistidas.','gold');return}const c=byId(activeId);c.aiOn=!c.aiOn;$('#aiSwitch').classList.toggle('on',c.aiOn);
  toast(c.aiOn?'✦':'⏸️','Aurora',c.aiOn?'IA ativada nesta conversa — respostas automáticas ligadas.':'IA pausada — você assume o atendimento.',c.aiOn?'gold':'')};
-$('#detailBtn').onclick=()=>{const sh=$('#chatShell');if(innerWidth>1350)sh.classList.toggle('no-detail');else sh.classList.toggle('show-detail')};
-$('#detailBtn').classList.add('on');
+function setClientDetails(open,restoreFocus=true){const sh=$('#chatShell');if(innerWidth>1350)sh.classList.toggle('no-detail',!open);else sh.classList.toggle('show-detail',open);$('#detailPane').hidden=!open;$('#detailBackdrop').hidden=!open;$('#clientDetailsToggle').setAttribute('aria-expanded',String(open));$('#clientDetailsToggle').setAttribute('aria-label',`${open?'Fechar':'Abrir'} detalhes do cliente`);if(restoreFocus)(open?$('#closeClientDetails'):$('#clientDetailsToggle')).focus({preventScroll:true})}
+function toggleClientDetails(){const open=innerWidth>1350?!$('#chatShell').classList.contains('no-detail'):$('#chatShell').classList.contains('show-detail');setClientDetails(!open)}
+$('#clientDetailsToggle').onclick=toggleClientDetails;$('#serviceWindow').onclick=toggleClientDetails;
+$('#closeClientDetails').onclick=()=>setClientDetails(false);$('#detailBackdrop').onclick=()=>setClientDetails(false);
 $$('[data-back]').forEach(b=>b.onclick=()=>$('#chatShell').classList.remove('conv-open'));
+document.addEventListener('keydown',event=>{if(event.key==='Escape'&&!$('#detailPane').hidden)setClientDetails(false)});
 $('#stageSel').innerHTML=STAGES.map(s=>`<option>${s}</option>`).join('');
 $('#stageSel').onchange=e=>{if(apiConversationsMode())return updateActiveApiContactStage(e.target.value);const c=byId(activeId);c.stage=e.target.value;renderKanban();toast('🎯','Funil atualizado',`${c.name} agora está em “${c.stage}”.`)};
 $('#tagInput').addEventListener('keydown',e=>{if(apiConversationsMode())return;if(e.key==='Enter'&&e.target.value.trim()){byId(activeId).tags.push(e.target.value.trim());e.target.value='';renderDetail();toast('🏷','Tag adicionada','Salva no perfil do cliente.')}});
