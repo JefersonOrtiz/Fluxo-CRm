@@ -1,3 +1,4 @@
+import { timingSafeEqual } from 'node:crypto';
 import { databaseError, email, HttpError, json, optionalString, parseBody, requiredString, routeId } from './http.mjs';
 
 export const ROLE_PERMISSIONS = Object.freeze([
@@ -177,8 +178,18 @@ export function createRequestHandler({ pool, security, config }) {
       }
 
       if (url.pathname === '/api/auth/bootstrap' && request.method === 'POST') {
-        const { rows: [{ count }] } = await pool.query('SELECT COUNT(*)::int AS count FROM users');
-        if (count) throw new HttpError(409, 'A organização inicial já foi criada', 'BOOTSTRAP_COMPLETED');
+        const configuredSecret = config.bootstrapSecret;
+        const suppliedSecret = request.headers['x-bootstrap-secret'];
+
+        const expected = Buffer.from(configuredSecret || '');
+        const supplied = Buffer.from(typeof suppliedSecret === 'string' ? suppliedSecret : '');
+
+        if (expected.length < 32 ||
+            supplied.length !== expected.length ||
+            !timingSafeEqual(expected, supplied)) {
+          throw new HttpError(403, 'Bootstrap não autorizado', 'FORBIDDEN');
+        }
+
         const body = await parseBody(request);
         const organizationName = requiredString(body, 'organizationName', { max: 120, label: 'Organização' });
         const name = requiredString(body, 'name', { max: 120, label: 'Nome' });
@@ -187,6 +198,9 @@ export function createRequestHandler({ pool, security, config }) {
         const client = await pool.connect();
         try {
           await client.query('BEGIN');
+          await client.query('SELECT pg_advisory_xact_lock(824731, 1)');
+          const { rows: [{ count }] } = await client.query('SELECT COUNT(*)::int AS count FROM users');
+          if (count) throw new HttpError(409, 'A organização inicial já foi criada', 'BOOTSTRAP_COMPLETED');
           const org = await client.query('INSERT INTO organizations(name) VALUES($1) RETURNING id,name', [organizationName]);
           const role = await client.query("INSERT INTO roles(organization_id,name,description,permissions) VALUES($1,'Administrador','Acesso total',$2) RETURNING id,name,permissions", [org.rows[0].id, JSON.stringify(['*'])]);
           const user = await client.query('INSERT INTO users(organization_id,role_id,name,email,password_hash) VALUES($1,$2,$3,$4,$5) RETURNING id,organization_id,name', [org.rows[0].id, role.rows[0].id, name, userEmail, security.passwordHash(password)]);

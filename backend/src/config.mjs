@@ -20,6 +20,7 @@ export function loadConfig() {
     jwtSecret: process.env.JWT_SECRET,
     encryptionKey,
     corsOrigin: process.env.CORS_ORIGIN || '*',
-    metaVerifyToken: process.env.META_VERIFY_TOKEN || ''
+    metaVerifyToken: process.env.META_VERIFY_TOKEN || '',
+    bootstrapSecret: process.env.BOOTSTRAP_SECRET || ''
   });
 }
