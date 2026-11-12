@@ -443,3 +443,46 @@ test('configurações da integração Meta exigem autorização', async () => {
   assert.equal(denied.status, 403);
   assert.equal(denied.body.code, 'FORBIDDEN');
 });
+
+test('revogação de permissões e desativação invalidam acessos antigos', async () => {
+  const account = await insertOrganization(
+    `Organização Segurança ${suffix}`,
+    `seguranca-${suffix}@example.test`,
+    ['contacts:write']
+  );
+
+  const token = await login(account.email);
+
+  const initial = await api('/contacts', {
+    token,
+    method: 'POST',
+    body: { name: 'Contato antes da revogação' }
+  });
+  assert.equal(initial.status, 201);
+
+  await pool.query(
+    'UPDATE roles SET permissions=$1::jsonb WHERE id=$2 AND organization_id=$3',
+    [JSON.stringify([]), account.roleId, account.organizationId]
+  );
+
+  const currentSession = await api('/auth/me', { token });
+  assert.equal(currentSession.status, 200);
+  assert.deepEqual(currentSession.body.user.permissions, []);
+
+  const revoked = await api('/contacts', {
+    token,
+    method: 'POST',
+    body: { name: 'Contato após revogação' }
+  });
+  assert.equal(revoked.status, 403);
+  assert.equal(revoked.body.code, 'FORBIDDEN');
+
+  await pool.query(
+    'UPDATE users SET active=false WHERE id=$1 AND organization_id=$2',
+    [account.userId, account.organizationId]
+  );
+
+  const disabled = await api('/auth/me', { token });
+  assert.equal(disabled.status, 401);
+  assert.equal(disabled.body.code, 'UNAUTHORIZED');
+});

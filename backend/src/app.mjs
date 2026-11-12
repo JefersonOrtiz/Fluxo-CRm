@@ -128,10 +128,31 @@ const userPayload = row => ({
   permissions: row.permissions || []
 });
 
-const auth = (request, security) => {
-  const session = security.readToken(request);
-  if (!session) throw new HttpError(401, 'Não autorizado', 'UNAUTHORIZED');
-  return session;
+const auth = async (request, security, pool) => {
+  const token = security.readToken(request);
+
+  if (!token?.userId || !token?.organizationId) {
+    throw new HttpError(401, 'Não autorizado', 'UNAUTHORIZED');
+  }
+
+  const { rows } = await pool.query(
+    `SELECT u.id, u.organization_id, u.name,
+            r.name AS role_name, r.permissions
+       FROM users u
+       JOIN roles r
+         ON r.id = u.role_id
+        AND r.organization_id = u.organization_id
+      WHERE u.id = $1
+        AND u.organization_id = $2
+        AND u.active = true`,
+    [token.userId, token.organizationId]
+  );
+
+  if (!rows[0]) {
+    throw new HttpError(401, 'Sessão inválida ou usuário desativado', 'UNAUTHORIZED');
+  }
+
+  return userPayload(rows[0]);
 };
 
 const requirePermission = (session, permission) => {
@@ -226,15 +247,15 @@ export function createRequestHandler({ pool, security, config }) {
         return json(response, 200, { token: security.signToken(user), user });
       }
 
-      if (url.pathname === '/api/auth/me' && request.method === 'GET') return json(response, 200, { user: auth(request, security) });
+      if (url.pathname === '/api/auth/me' && request.method === 'GET') return json(response, 200, { user: await auth(request, security, pool) });
 
       if (url.pathname === '/api/departments' && request.method === 'GET') {
-        const session = auth(request, security);
+        const session = await auth(request, security, pool);
         const { rows } = await pool.query('SELECT id,name,color,created_at "createdAt" FROM departments WHERE organization_id=$1 ORDER BY name', [session.organizationId]);
         return json(response, 200, rows);
       }
       if (url.pathname === '/api/departments' && request.method === 'POST') {
-        const session = auth(request, security);
+        const session = await auth(request, security, pool);
         requirePermission(session, 'organization:write');
         const body = await parseBody(request);
         const name = requiredString(body, 'name', { max: 100, label: 'Nome' });
@@ -244,7 +265,7 @@ export function createRequestHandler({ pool, security, config }) {
       }
       const departmentId = routeId(url.pathname, 'departments');
       if (departmentId && request.method === 'DELETE') {
-        const session = auth(request, security);
+        const session = await auth(request, security, pool);
         requirePermission(session, 'organization:write');
         const usage = await pool.query('SELECT 1 FROM users WHERE organization_id=$1 AND department_id=$2 LIMIT 1', [session.organizationId, departmentId]);
         if (usage.rowCount) throw new HttpError(409, 'Setor em uso por colaboradores', 'RESOURCE_IN_USE');
@@ -254,13 +275,13 @@ export function createRequestHandler({ pool, security, config }) {
       }
 
       if (url.pathname === '/api/roles' && request.method === 'GET') {
-        const session = auth(request, security);
+        const session = await auth(request, security, pool);
         requirePermission(session, 'roles:write');
         const { rows } = await pool.query('SELECT id,name,description,permissions,created_at "createdAt" FROM roles WHERE organization_id=$1 ORDER BY name', [session.organizationId]);
         return json(response, 200, rows);
       }
       if (url.pathname === '/api/roles' && request.method === 'POST') {
-        const session = auth(request, security);
+        const session = await auth(request, security, pool);
         requirePermission(session, 'roles:write');
         const body = await parseBody(request);
         const name = requiredString(body, 'name', { max: 80, label: 'Nome' });
@@ -271,7 +292,7 @@ export function createRequestHandler({ pool, security, config }) {
       }
       const roleId = routeId(url.pathname, 'roles');
       if (roleId && request.method === 'DELETE') {
-        const session = auth(request, security);
+        const session = await auth(request, security, pool);
         requirePermission(session, 'roles:write');
         const usage = await pool.query('SELECT 1 FROM users WHERE organization_id=$1 AND role_id=$2 LIMIT 1', [session.organizationId, roleId]);
         if (usage.rowCount) throw new HttpError(409, 'Privilégio em uso por colaboradores', 'RESOURCE_IN_USE');
@@ -281,13 +302,13 @@ export function createRequestHandler({ pool, security, config }) {
       }
 
       if (url.pathname === '/api/members' && request.method === 'GET') {
-        const session = auth(request, security);
+        const session = await auth(request, security, pool);
         requirePermission(session, 'members:write');
         const { rows } = await pool.query(`SELECT u.id,u.name,u.email,u.active,u.department_id "departmentId",u.role_id "roleId",u.last_seen_at "lastSeenAt",(u.last_seen_at > now() - interval '5 minutes') online,d.name department,r.name role FROM users u LEFT JOIN departments d ON d.id=u.department_id LEFT JOIN roles r ON r.id=u.role_id WHERE u.organization_id=$1 ORDER BY u.name`, [session.organizationId]);
         return json(response, 200, rows);
       }
       if (url.pathname === '/api/members' && request.method === 'POST') {
-        const session = auth(request, security);
+        const session = await auth(request, security, pool);
         requirePermission(session, 'members:write');
         const body = await parseBody(request);
         const name = requiredString(body, 'name', { max: 120, label: 'Nome' });
@@ -302,7 +323,7 @@ export function createRequestHandler({ pool, security, config }) {
       }
       const memberId = routeId(url.pathname, 'members');
       if (memberId && request.method === 'PATCH') {
-        const session = auth(request, security);
+        const session = await auth(request, security, pool);
         requirePermission(session, 'members:write');
         const body = await parseBody(request);
         const updates = [];
@@ -333,12 +354,12 @@ export function createRequestHandler({ pool, security, config }) {
       }
 
       if (url.pathname === '/api/tags' && request.method === 'GET') {
-        const session = auth(request, security);
+        const session = await auth(request, security, pool);
         const { rows } = await pool.query('SELECT id,name,color FROM tags WHERE organization_id=$1 ORDER BY name', [session.organizationId]);
         return json(response, 200, rows);
       }
       if (url.pathname === '/api/tags' && request.method === 'POST') {
-        const session = auth(request, security);
+        const session = await auth(request, security, pool);
         requirePermission(session, 'organization:write');
         const body = await parseBody(request);
         const name = requiredString(body, 'name', { max: 60, label: 'Nome' });
@@ -348,7 +369,7 @@ export function createRequestHandler({ pool, security, config }) {
       }
       const tagId = routeId(url.pathname, 'tags');
       if (tagId && request.method === 'DELETE') {
-        const session = auth(request, security);
+        const session = await auth(request, security, pool);
         requirePermission(session, 'organization:write');
         const result = await pool.query('DELETE FROM tags WHERE id=$1 AND organization_id=$2 RETURNING id', [tagId, session.organizationId]);
         if (!result.rowCount) throw notFound('Tag');
@@ -356,7 +377,7 @@ export function createRequestHandler({ pool, security, config }) {
       }
 
       if (url.pathname === '/api/contacts' && request.method === 'GET') {
-        const session = auth(request, security);
+        const session = await auth(request, security, pool);
         const page = Math.max(1, Number.parseInt(url.searchParams.get('page') || '1', 10) || 1);
         const limit = Math.min(100, Math.max(1, Number.parseInt(url.searchParams.get('limit') || '20', 10) || 20));
         const sort = url.searchParams.get('sort') || 'updatedAt';
@@ -376,7 +397,7 @@ export function createRequestHandler({ pool, security, config }) {
         return json(response, 200, { items: rows, page: { number: page, limit, total, totalPages: Math.ceil(total / limit), valueCentsTotal: Number(count.rows[0].valueCentsTotal) } });
       }
       if (url.pathname === '/api/contacts' && request.method === 'POST') {
-        const session = auth(request, security);
+        const session = await auth(request, security, pool);
         requirePermission(session, 'contacts:write');
         const body = await parseBody(request);
         const fields = contactFields(body);
@@ -399,13 +420,13 @@ export function createRequestHandler({ pool, security, config }) {
       }
       const contactId = routeId(url.pathname, 'contacts');
       if (contactId && request.method === 'GET') {
-        const session = auth(request, security);
+        const session = await auth(request, security, pool);
         const contact = await getContact(pool, contactId, session.organizationId);
         if (!contact) throw notFound('Contato');
         return json(response, 200, contact);
       }
       if (contactId && request.method === 'PATCH') {
-        const session = auth(request, security);
+        const session = await auth(request, security, pool);
         requirePermission(session, 'contacts:write');
         const body = await parseBody(request);
         const expectedVersion = requiredString(body, 'expectedVersion', { max: 32, label: 'Versão esperada' });
@@ -441,7 +462,7 @@ export function createRequestHandler({ pool, security, config }) {
       }
 
       if (url.pathname === '/api/conversations' && request.method === 'GET') {
-        const session = auth(request, security);
+        const session = await auth(request, security, pool);
         const limit = Math.min(100, Math.max(1, Number.parseInt(url.searchParams.get('limit') || '30', 10) || 30));
         const status = url.searchParams.get('status') || '';
         const search = (url.searchParams.get('q') || '').trim().slice(0, 120);
@@ -463,7 +484,7 @@ export function createRequestHandler({ pool, security, config }) {
         return json(response, 200, { items, nextCursor: hasMore ? encodeCursor(last.updatedAt, last.id) : null });
       }
       if (url.pathname === '/api/conversations' && request.method === 'POST') {
-        const session = auth(request, security);
+        const session = await auth(request, security, pool);
         requirePermission(session, 'conversations:write');
         const body = await parseBody(request);
         const selectedContactId = requiredString(body, 'contactId', { max: 36, label: 'Contato' });
@@ -494,7 +515,7 @@ export function createRequestHandler({ pool, security, config }) {
 
       const conversationMessagesMatch = url.pathname.match(/^\/api\/conversations\/([^/]+)\/messages$/);
       if (conversationMessagesMatch && request.method === 'GET') {
-        const session = auth(request, security);
+        const session = await auth(request, security, pool);
         const conversationId = decodeURIComponent(conversationMessagesMatch[1]);
         const limit = Math.min(100, Math.max(1, Number.parseInt(url.searchParams.get('limit') || '50', 10) || 50));
         const cursor = decodeCursor(url.searchParams.get('cursor'));
@@ -513,7 +534,7 @@ export function createRequestHandler({ pool, security, config }) {
         return json(response, 200, { items, nextCursor: hasMore ? encodeCursor(last.sentAt, last.id) : null });
       }
       if (conversationMessagesMatch && request.method === 'POST') {
-        const session = auth(request, security);
+        const session = await auth(request, security, pool);
         requirePermission(session, 'messages:write');
         const conversationId = decodeURIComponent(conversationMessagesMatch[1]);
         const payload = await parseBody(request);
@@ -544,13 +565,13 @@ export function createRequestHandler({ pool, security, config }) {
 
       const conversationId = routeId(url.pathname, 'conversations');
       if (conversationId && request.method === 'GET') {
-        const session = auth(request, security);
+        const session = await auth(request, security, pool);
         const conversation = await getConversation(pool, conversationId, session.organizationId);
         if (!conversation) throw notFound('Conversa');
         return json(response, 200, conversation);
       }
       if (conversationId && request.method === 'PATCH') {
-        const session = auth(request, security);
+        const session = await auth(request, security, pool);
         requirePermission(session, 'conversations:write');
         const body = await parseBody(request);
         const expectedVersion = requiredString(body, 'expectedVersion', { max: 32, label: 'Versão esperada' });
@@ -580,7 +601,7 @@ export function createRequestHandler({ pool, security, config }) {
       }
 
       if (url.pathname === '/api/events' && request.method === 'GET') {
-        const session = auth(request, security);
+        const session = await auth(request, security, pool);
         const from = readInstant({ from: url.searchParams.get('from') }, 'from', 'Início do intervalo');
         const to = readInstant({ to: url.searchParams.get('to') }, 'to', 'Fim do intervalo');
         if (to <= from || to - from > 366 * 24 * 60 * 60 * 1000) throw new HttpError(400, 'Intervalo deve ser positivo e ter no máximo 366 dias', 'VALIDATION_ERROR');
@@ -602,7 +623,7 @@ export function createRequestHandler({ pool, security, config }) {
         return json(response, 200, { items, nextCursor: hasMore ? encodeCursor(last.startAt, last.id) : null });
       }
       if (url.pathname === '/api/events' && request.method === 'POST') {
-        const session = auth(request, security);
+        const session = await auth(request, security, pool);
         requirePermission(session, 'events:write');
         const body = await parseBody(request);
         const title = requiredString(body, 'title', { max: 200, label: 'Título' });
@@ -636,13 +657,13 @@ export function createRequestHandler({ pool, security, config }) {
 
       const eventId = routeId(url.pathname, 'events');
       if (eventId && request.method === 'GET') {
-        const session = auth(request, security);
+        const session = await auth(request, security, pool);
         const event = await getEvent(pool, eventId, session.organizationId);
         if (!event) throw notFound('Evento');
         return json(response, 200, event);
       }
       if (eventId && request.method === 'PATCH') {
-        const session = auth(request, security);
+        const session = await auth(request, security, pool);
         requirePermission(session, 'events:write');
         const body = await parseBody(request);
         const expectedVersion = requiredString(body, 'expectedVersion', { max: 32, label: 'Versão esperada' });
@@ -685,7 +706,7 @@ export function createRequestHandler({ pool, security, config }) {
         }
       }
       if (eventId && request.method === 'DELETE') {
-        const session = auth(request, security);
+        const session = await auth(request, security, pool);
         requirePermission(session, 'events:write');
         const expectedVersion = requiredString({ expectedVersion: url.searchParams.get('expectedVersion') }, 'expectedVersion', { max: 32, label: 'Versão esperada' });
         const deleted = await pool.query('DELETE FROM events WHERE id=$1 AND organization_id=$2 AND xmin::text=$3 RETURNING id', [eventId, session.organizationId, expectedVersion]);
@@ -698,13 +719,13 @@ export function createRequestHandler({ pool, security, config }) {
       }
 
       if (url.pathname === '/api/integrations/meta' && request.method === 'GET') {
-        const session = auth(request, security);
+        const session = await auth(request, security, pool);
         requirePermission(session, 'integrations:write');
         const { rows } = await pool.query('SELECT app_id,business_id,waba_id,phone_number_id,status,updated_at FROM integrations WHERE organization_id=$1 AND provider=$2', [session.organizationId, 'meta']);
         return json(response, 200, rows[0] || { status: 'not_configured' });
       }
       if (url.pathname === '/api/integrations/meta' && request.method === 'PUT') {
-        const session = auth(request, security);
+        const session = await auth(request, security, pool);
         requirePermission(session, 'integrations:write');
         const body = await parseBody(request);
         const secrets = body.accessToken || body.appSecret ? security.encrypt(JSON.stringify({ accessToken: body.accessToken || '', appSecret: body.appSecret || '' })) : null;
