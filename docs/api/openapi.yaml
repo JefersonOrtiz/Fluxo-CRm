@@ -1,0 +1,1092 @@
+openapi: 3.1.0
+info:
+  title: Fluxo CRM API
+  version: 0.3.0
+  description: >-
+    Contrato da API PostgreSQL atual. Autenticação, organização, setores,
+    colaboradores, privilégios, tags, contatos, funil e configuração Meta estão
+    integrados ao frontend. Conversas e mensagens manuais também são persistidas;
+    a agenda também é persistida com instantes UTC e fuso IANA. O envio a
+    provedores externos ainda não está implementado.
+servers:
+  - url: http://localhost:3001
+    description: Desenvolvimento direto
+  - url: http://localhost:8080
+    description: Proxy do Docker Compose
+tags:
+  - name: Health
+  - name: Auth
+  - name: Organization
+  - name: Contacts
+  - name: Conversations
+  - name: Events
+  - name: Integrations
+paths:
+  /api/health:
+    get:
+      tags: [Health]
+      summary: Verifica a API e a conexão com o banco
+      responses:
+        '200':
+          description: Serviço disponível
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok, service]
+                properties:
+                  ok: { type: boolean, const: true }
+                  service: { type: string, const: fluxo-api }
+        '500': { $ref: '#/components/responses/InternalError' }
+  /api/auth/bootstrap:
+    post:
+      tags: [Auth]
+      summary: Cria a primeira organização e o administrador
+      description: Disponível somente enquanto não existir nenhum usuário.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/BootstrapInput' }
+      responses:
+        '201': { $ref: '#/components/responses/AuthSuccess' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '409':
+          description: Bootstrap já realizado
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '500': { $ref: '#/components/responses/InternalError' }
+  /api/auth/login:
+    post:
+      tags: [Auth]
+      summary: Autentica um colaborador ativo
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email: { type: string, format: email }
+                password: { type: string, format: password }
+      responses:
+        '200': { $ref: '#/components/responses/AuthSuccess' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '500': { $ref: '#/components/responses/InternalError' }
+  /api/auth/me:
+    get:
+      tags: [Auth]
+      summary: Retorna a sessão autenticada
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: Sessão atual
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [user]
+                properties:
+                  user: { $ref: '#/components/schemas/Session' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /api/departments:
+    get:
+      tags: [Organization]
+      summary: Lista os setores da organização
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: Setores
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Department' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+    post:
+      tags: [Organization]
+      summary: Cria um setor
+      description: Exige `organization:write` ou `*`.
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name: { type: string }
+                color: { type: string, default: jade }
+      responses:
+        '201':
+          description: Setor criado
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Department' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /api/departments/{id}:
+    parameters:
+      - $ref: '#/components/parameters/ResourceId'
+    delete:
+      tags: [Organization]
+      summary: Exclui um setor sem colaboradores
+      description: Exige `organization:write` ou `*`.
+      security: [{ bearerAuth: [] }]
+      responses:
+        '204': { description: Setor excluído }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /api/roles:
+    get:
+      tags: [Organization]
+      summary: Lista os privilégios da organização
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: Privilégios
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Role' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+    post:
+      tags: [Organization]
+      summary: Cria um privilégio
+      description: Exige `roles:write` ou `*`. A permissão reservada `*` não pode ser atribuída.
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RoleInput' }
+      responses:
+        '201':
+          description: Privilégio criado
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Role' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /api/roles/{id}:
+    parameters:
+      - $ref: '#/components/parameters/ResourceId'
+    patch:
+      tags: [Organization]
+      summary: Atualiza um privilégio
+      description: >-
+        Exige `roles:write` ou `*`. Funções administrativas que usam `*`
+        exigem `allowAdministrativeChange=true`; a última função com acesso
+        administrativo ativo não pode ser desativada.
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RolePatch' }
+      responses:
+        '200':
+          description: Privilégio atualizado
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Role' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+    delete:
+      tags: [Organization]
+      summary: Exclui um privilégio sem colaboradores
+      description: Exige `roles:write` ou `*`.
+      security: [{ bearerAuth: [] }]
+      responses:
+        '204': { description: Privilégio excluído }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /api/members:
+    get:
+      tags: [Organization]
+      summary: Lista os colaboradores da organização
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: Colaboradores
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Member' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+    post:
+      tags: [Organization]
+      summary: Cria um colaborador
+      description: Exige `members:write` ou `*`. Setor e privilégio devem pertencer à mesma organização.
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/MemberInput' }
+      responses:
+        '201':
+          description: Colaborador criado
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Member' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /api/members/{id}:
+    parameters:
+      - $ref: '#/components/parameters/ResourceId'
+    patch:
+      tags: [Organization]
+      summary: Atualiza um colaborador
+      description: Exige `members:write` ou `*`. Aceita somente os campos documentados.
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/MemberPatch' }
+      responses:
+        '200':
+          description: Colaborador atualizado
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Member' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /api/tags:
+    get:
+      tags: [Organization]
+      summary: Lista tags da organização
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: Tags
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Tag' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+    post:
+      tags: [Organization]
+      summary: Cria uma tag
+      description: Exige `organization:write` ou `*`.
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name: { type: string }
+                color: { type: string, default: sky }
+      responses:
+        '201':
+          description: Tag criada
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Tag' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /api/tags/{id}:
+    parameters:
+      - $ref: '#/components/parameters/ResourceId'
+    delete:
+      tags: [Organization]
+      summary: Exclui uma tag
+      description: Exige `organization:write` ou `*`.
+      security: [{ bearerAuth: [] }]
+      responses:
+        '204': { description: Tag excluída }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /api/contacts:
+    get:
+      tags: [Contacts]
+      summary: Lista contatos da organização
+      description: Pesquisa nome, empresa, telefone e e-mail. Os totais consideram todos os filtros, antes da paginação.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { in: query, name: page, schema: { type: integer, minimum: 1, default: 1 } }
+        - { in: query, name: limit, schema: { type: integer, minimum: 1, maximum: 100, default: 20 } }
+        - { in: query, name: q, schema: { type: string, maxLength: 120 } }
+        - { in: query, name: stage, schema: { $ref: '#/components/schemas/ContactStage' } }
+        - { in: query, name: sort, schema: { type: string, enum: [updatedAt, name, value, createdAt], default: updatedAt } }
+        - { in: query, name: direction, schema: { type: string, enum: [asc, desc], default: desc } }
+      responses:
+        '200':
+          description: Página de contatos
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ContactPage' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+    post:
+      tags: [Contacts]
+      summary: Cria um contato
+      description: Exige `contacts:write` ou `*`. As tags devem pertencer à organização autenticada.
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ContactInput' }
+      responses:
+        '201':
+          description: Contato criado
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Contact' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /api/contacts/{id}:
+    parameters:
+      - $ref: '#/components/parameters/ResourceId'
+    get:
+      tags: [Contacts]
+      summary: Obtém um contato da organização
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: Contato
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Contact' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    patch:
+      tags: [Contacts]
+      summary: Atualiza um contato com concorrência otimista
+      description: Exige `contacts:write` ou `*`. `expectedVersion` deve ser a versão da última leitura.
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ContactPatch' }
+      responses:
+        '200':
+          description: Contato atualizado, com uma nova versão
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Contact' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409':
+          description: A versão enviada ficou obsoleta (`STALE_WRITE`)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+  /api/conversations:
+    get:
+      tags: [Conversations]
+      summary: Lista conversas da organização por cursor
+      description: Ordena de forma estável por `updatedAt` e `id`, ambos decrescentes.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { in: query, name: limit, schema: { type: integer, minimum: 1, maximum: 100, default: 30 } }
+        - { in: query, name: cursor, schema: { type: string }, description: Cursor opaco retornado pela página anterior. }
+        - { in: query, name: q, schema: { type: string, maxLength: 120 } }
+        - { in: query, name: status, schema: { $ref: '#/components/schemas/ConversationStatus' } }
+      responses:
+        '200':
+          description: Página de conversas
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ConversationPage' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+    post:
+      tags: [Conversations]
+      summary: Abre ou reutiliza uma conversa aberta
+      description: Exige `conversations:write` ou `*`. O canal identifica a origem, mas não implica conexão com um provedor.
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ConversationInput' }
+      responses:
+        '200':
+          description: Conversa aberta existente reutilizada
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Conversation' }
+        '201':
+          description: Conversa criada
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Conversation' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /api/conversations/{id}:
+    parameters:
+      - $ref: '#/components/parameters/ResourceId'
+    get:
+      tags: [Conversations]
+      summary: Obtém uma conversa da organização
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: Conversa
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Conversation' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    patch:
+      tags: [Conversations]
+      summary: Altera estado ou responsável com concorrência otimista
+      description: Exige `conversations:write` ou `*`. O responsável deve pertencer à organização.
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ConversationPatch' }
+      responses:
+        '200':
+          description: Conversa atualizada
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Conversation' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /api/conversations/{id}/messages:
+    parameters:
+      - $ref: '#/components/parameters/ResourceId'
+    get:
+      tags: [Conversations]
+      summary: Lista mensagens por cursor
+      description: Retorna itens do mais novo para o mais antigo.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { in: query, name: limit, schema: { type: integer, minimum: 1, maximum: 100, default: 50 } }
+        - { in: query, name: cursor, schema: { type: string }, description: Cursor opaco retornado pela página anterior. }
+      responses:
+        '200':
+          description: Página de mensagens
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MessagePage' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    post:
+      tags: [Conversations]
+      summary: Persiste uma mensagem manual idempotente
+      description: >-
+        Exige `messages:write` ou `*`. A mensagem inicia como `pending`: foi aceita
+        pela API, mas não foi enviada a um provedor externo.
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/MessageInput' }
+      responses:
+        '200':
+          description: Repetição idempotente; retorna a mensagem existente com `duplicate=true`
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MessageResult' }
+        '201':
+          description: Mensagem persistida com `duplicate=false`
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MessageResult' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /api/events:
+    get:
+      tags: [Events]
+      summary: Lista eventos sobrepostos ao intervalo por cursor
+      description: O intervalo é semiaberto (`from <= instante < to`) e pode ter no máximo 366 dias.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { in: query, name: from, required: true, schema: { type: string, format: date-time } }
+        - { in: query, name: to, required: true, schema: { type: string, format: date-time } }
+        - { in: query, name: contactId, schema: { type: string, format: uuid } }
+        - { in: query, name: limit, schema: { type: integer, minimum: 1, maximum: 500, default: 200 } }
+        - { in: query, name: cursor, schema: { type: string }, description: Cursor opaco retornado pela página anterior. }
+      responses:
+        '200':
+          description: Página de eventos ordenada por início e identificador
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/EventPage' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+    post:
+      tags: [Events]
+      summary: Cria um evento
+      description: Exige `events:write` ou `*`. Sem responsável explícito, usa o usuário autenticado.
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/EventInput' }
+      responses:
+        '201':
+          description: Evento criado
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Event' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409':
+          description: Sobreposição com evento do mesmo responsável (`EVENT_CONFLICT`)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+  /api/events/{id}:
+    parameters:
+      - $ref: '#/components/parameters/ResourceId'
+    get:
+      tags: [Events]
+      summary: Obtém um evento da organização
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: Evento
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Event' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    patch:
+      tags: [Events]
+      summary: Atualiza um evento com concorrência otimista
+      description: Exige `events:write` ou `*`. Sobreposição intencional exige `allowConflict=true`.
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/EventPatch' }
+      responses:
+        '200':
+          description: Evento atualizado
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Event' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+    delete:
+      tags: [Events]
+      summary: Exclui um evento na versão esperada
+      description: Exige `events:write` ou `*`.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - in: query
+          name: expectedVersion
+          required: true
+          schema: { type: string, maxLength: 32 }
+      responses:
+        '204': { description: Evento excluído }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /api/integrations/meta:
+    get:
+      tags: [Integrations]
+      summary: Obtém a configuração não sensível da Meta
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: Configuração ou estado não configurado
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MetaOutput' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+    put:
+      tags: [Integrations]
+      summary: Cria ou atualiza a configuração da Meta
+      description: Exige `integrations:write` ou `*`. Segredos enviados são cifrados.
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/MetaInput' }
+      responses:
+        '200':
+          description: Configuração atualizada sem retornar segredos
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MetaOutput' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /api/webhooks/meta:
+    get:
+      tags: [Integrations]
+      summary: Responde ao desafio de verificação da Meta
+      parameters:
+        - in: query
+          name: hub.verify_token
+          required: true
+          schema: { type: string }
+        - in: query
+          name: hub.challenge
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Desafio aceito
+          content:
+            text/plain:
+              schema: { type: string }
+        '403': { description: Token de verificação inválido }
+    post:
+      tags: [Integrations]
+      summary: Recebe um evento da Meta
+      description: Estrutura preparatória; atualmente o evento não é validado nem processado.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, additionalProperties: true }
+      responses:
+        '200': { description: Corpo recebido }
+        '500': { $ref: '#/components/responses/InternalError' }
+components:
+  parameters:
+    ResourceId:
+      in: path
+      name: id
+      required: true
+      schema: { type: string, format: uuid }
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas:
+    Error:
+      type: object
+      required: [error, code]
+      properties:
+        error: { type: string }
+        code: { type: string }
+        conflict:
+          type: object
+          additionalProperties: true
+          description: Recurso conflitante quando o código de erro fornece esse contexto.
+    BootstrapInput:
+      type: object
+      required: [organizationName, name, email, password]
+      properties:
+        organizationName: { type: string }
+        name: { type: string }
+        email: { type: string, format: email }
+        password: { type: string, format: password, minLength: 8 }
+    Session:
+      type: object
+      required: [userId, organizationId, name, permissions]
+      properties:
+        userId: { type: string, format: uuid }
+        organizationId: { type: string, format: uuid }
+        name: { type: string }
+        role: { type: [string, 'null'] }
+        permissions:
+          type: array
+          items: { type: string }
+    AuthResult:
+      type: object
+      required: [token, user]
+      properties:
+        token: { type: string }
+        user: { $ref: '#/components/schemas/Session' }
+    Department:
+      type: object
+      required: [id, name, color]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        color: { type: string }
+        createdAt: { type: string, format: date-time }
+    RoleInput:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string, maxLength: 80 }
+        description: { type: string, maxLength: 500 }
+        permissions:
+          type: array
+          uniqueItems: true
+          items:
+            enum: [organization:write, contacts:write, conversations:write, messages:write, events:write, members:write, roles:write, integrations:write]
+    RolePatch:
+      type: object
+      minProperties: 1
+      properties:
+        name: { type: string, maxLength: 80 }
+        description: { type: string, maxLength: 500 }
+        permissions:
+          type: array
+          uniqueItems: true
+          items:
+            enum: [organization:write, contacts:write, conversations:write, messages:write, events:write, members:write, roles:write, integrations:write, '*']
+        allowAdministrativeChange:
+          type: boolean
+          default: false
+          description: Confirma explicitamente uma alteração de função administrativa.
+    Role:
+      allOf:
+        - $ref: '#/components/schemas/RoleInput'
+        - type: object
+          required: [id, name, description, permissions]
+          properties:
+            id: { type: string, format: uuid }
+            createdAt: { type: string, format: date-time }
+    MemberInput:
+      type: object
+      required: [name, email, password]
+      properties:
+        name: { type: string, maxLength: 120 }
+        email: { type: string, format: email, maxLength: 255 }
+        password: { type: string, format: password, minLength: 8, maxLength: 128, writeOnly: true }
+        departmentId: { type: [string, 'null'], format: uuid }
+        roleId: { type: [string, 'null'], format: uuid }
+    MemberPatch:
+      type: object
+      minProperties: 1
+      properties:
+        name: { type: string, maxLength: 120 }
+        email: { type: string, format: email, maxLength: 255 }
+        password: { type: string, format: password, minLength: 8, maxLength: 128, writeOnly: true }
+        departmentId: { type: [string, 'null'], format: uuid }
+        roleId: { type: [string, 'null'], format: uuid }
+        active: { type: boolean }
+    Member:
+      type: object
+      required: [id, name, email, active]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        email: { type: string, format: email }
+        active: { type: boolean }
+        departmentId: { type: [string, 'null'], format: uuid }
+        roleId: { type: [string, 'null'], format: uuid }
+        department: { type: [string, 'null'] }
+        role: { type: [string, 'null'] }
+        lastSeenAt: { type: [string, 'null'], format: date-time }
+        online: { type: boolean }
+    Tag:
+      type: object
+      required: [id, name, color]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        color: { type: string }
+    ContactStage:
+      type: string
+      enum: [Novo lead, Qualificação, Proposta, Negociação, Fechamento]
+    ContactInput:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string, maxLength: 160 }
+        phone: { type: [string, 'null'], maxLength: 40 }
+        email: { type: [string, 'null'], format: email, maxLength: 255 }
+        company: { type: [string, 'null'], maxLength: 160 }
+        stage: { $ref: '#/components/schemas/ContactStage' }
+        valueCents: { type: integer, minimum: 0, maximum: 2147483647, default: 0 }
+        tagIds:
+          type: array
+          maxItems: 20
+          uniqueItems: true
+          items: { type: string, format: uuid }
+    ContactPatch:
+      type: object
+      required: [expectedVersion]
+      minProperties: 2
+      properties:
+        expectedVersion: { type: string, maxLength: 32 }
+        name: { type: string, maxLength: 160 }
+        phone: { type: [string, 'null'], maxLength: 40 }
+        email: { type: [string, 'null'], format: email, maxLength: 255 }
+        company: { type: [string, 'null'], maxLength: 160 }
+        stage: { $ref: '#/components/schemas/ContactStage' }
+        valueCents: { type: integer, minimum: 0, maximum: 2147483647 }
+        tagIds:
+          type: array
+          maxItems: 20
+          uniqueItems: true
+          items: { type: string, format: uuid }
+    Contact:
+      type: object
+      required: [id, name, stage, valueCents, version, tags, createdAt, updatedAt]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        phone: { type: [string, 'null'] }
+        email: { type: [string, 'null'], format: email }
+        company: { type: [string, 'null'] }
+        stage: { $ref: '#/components/schemas/ContactStage' }
+        valueCents: { type: integer, minimum: 0 }
+        version: { type: string, description: Versão opaca derivada de `xmin`; não interpretar numericamente. }
+        tags:
+          type: array
+          items: { $ref: '#/components/schemas/Tag' }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    ContactPage:
+      type: object
+      required: [items, page]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/Contact' }
+        page:
+          type: object
+          required: [number, limit, total, totalPages, valueCentsTotal]
+          properties:
+            number: { type: integer, minimum: 1 }
+            limit: { type: integer, minimum: 1, maximum: 100 }
+            total: { type: integer, minimum: 0 }
+            totalPages: { type: integer, minimum: 0 }
+            valueCentsTotal: { type: integer, minimum: 0 }
+    ConversationStatus:
+      type: string
+      enum: [open, closed]
+    ConversationInput:
+      type: object
+      required: [contactId]
+      properties:
+        contactId: { type: string, format: uuid }
+        channel: { type: string, enum: [manual, whatsapp], default: manual }
+    ConversationPatch:
+      type: object
+      required: [expectedVersion]
+      minProperties: 2
+      properties:
+        expectedVersion: { type: string, maxLength: 32 }
+        status: { $ref: '#/components/schemas/ConversationStatus' }
+        assignedUserId: { type: [string, 'null'], format: uuid }
+    Conversation:
+      type: object
+      required: [id, contactId, contactName, channel, status, version, createdAt, updatedAt]
+      properties:
+        id: { type: string, format: uuid }
+        contactId: { type: string, format: uuid }
+        contactName: { type: string }
+        contactCompany: { type: [string, 'null'] }
+        contactPhone: { type: [string, 'null'] }
+        channel: { type: string }
+        status: { $ref: '#/components/schemas/ConversationStatus' }
+        assignedUserId: { type: [string, 'null'], format: uuid }
+        assignedUserName: { type: [string, 'null'] }
+        version: { type: string, description: Versão opaca para concorrência otimista. }
+        latestMessageId: { type: [string, 'null'], format: uuid }
+        latestMessageBody: { type: [string, 'null'] }
+        latestMessageDirection: { type: [string, 'null'], enum: [inbound, outbound, null] }
+        latestMessageSenderType: { type: [string, 'null'], enum: [contact, user, ai, null] }
+        latestMessageStatus: { oneOf: [{ $ref: '#/components/schemas/MessageStatus' }, { type: 'null' }] }
+        latestMessageSentAt: { type: [string, 'null'], format: date-time }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    ConversationPage:
+      type: object
+      required: [items, nextCursor]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/Conversation' }
+        nextCursor: { type: [string, 'null'] }
+    MessageStatus:
+      type: string
+      enum: [pending, sent, delivered, read, failed]
+    MessageInput:
+      type: object
+      required: [body, clientMessageId]
+      properties:
+        body: { type: string, minLength: 1, maxLength: 10000 }
+        clientMessageId:
+          type: string
+          maxLength: 120
+          description: Chave idempotente gerada pelo cliente e única dentro da conversa.
+    Message:
+      type: object
+      required: [id, conversationId, direction, senderType, body, status, sentAt]
+      properties:
+        id: { type: string, format: uuid }
+        conversationId: { type: string, format: uuid }
+        direction: { type: string, enum: [inbound, outbound] }
+        senderType: { type: string, enum: [contact, user, ai] }
+        body: { type: string }
+        clientMessageId: { type: [string, 'null'] }
+        providerMessageId: { type: [string, 'null'] }
+        status: { $ref: '#/components/schemas/MessageStatus' }
+        sentAt: { type: string, format: date-time }
+    MessageResult:
+      type: object
+      required: [message, duplicate]
+      properties:
+        message: { $ref: '#/components/schemas/Message' }
+        duplicate: { type: boolean }
+    MessagePage:
+      type: object
+      required: [items, nextCursor]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/Message' }
+        nextCursor: { type: [string, 'null'] }
+    EventType:
+      type: string
+      enum: [reuniao, followup, entrega, lead]
+    EventInput:
+      type: object
+      required: [title, type, startAt, endAt, timezone]
+      properties:
+        title: { type: string, minLength: 1, maxLength: 200 }
+        type: { $ref: '#/components/schemas/EventType' }
+        startAt: { type: string, format: date-time }
+        endAt: { type: string, format: date-time }
+        timezone: { type: string, maxLength: 64, examples: [America/Sao_Paulo] }
+        contactId: { type: [string, 'null'], format: uuid }
+        assignedUserId: { type: [string, 'null'], format: uuid }
+        allowConflict:
+          type: boolean
+          default: false
+          description: Deve ser `true` somente após decisão explícita do usuário.
+    EventPatch:
+      type: object
+      required: [expectedVersion]
+      minProperties: 2
+      properties:
+        expectedVersion: { type: string, maxLength: 32 }
+        title: { type: string, minLength: 1, maxLength: 200 }
+        type: { $ref: '#/components/schemas/EventType' }
+        startAt: { type: string, format: date-time }
+        endAt: { type: string, format: date-time }
+        timezone: { type: string, maxLength: 64 }
+        contactId: { type: [string, 'null'], format: uuid }
+        assignedUserId: { type: [string, 'null'], format: uuid }
+        allowConflict: { type: boolean, default: false }
+    Event:
+      type: object
+      required: [id, title, type, startAt, endAt, timezone, version, createdAt, updatedAt]
+      properties:
+        id: { type: string, format: uuid }
+        title: { type: string }
+        type: { $ref: '#/components/schemas/EventType' }
+        startAt: { type: string, format: date-time, description: Instante normalizado em UTC. }
+        endAt: { type: string, format: date-time, description: Instante normalizado em UTC. }
+        timezone: { type: string, description: Fuso IANA informado no agendamento. }
+        contactId: { type: [string, 'null'], format: uuid }
+        contactName: { type: [string, 'null'] }
+        contactCompany: { type: [string, 'null'] }
+        assignedUserId: { type: [string, 'null'], format: uuid }
+        assignedUserName: { type: [string, 'null'] }
+        version: { type: string, description: Versão opaca para concorrência otimista. }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    EventPage:
+      type: object
+      required: [items, nextCursor]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/Event' }
+        nextCursor: { type: [string, 'null'] }
+    MetaInput:
+      type: object
+      properties:
+        appId: { type: [string, 'null'] }
+        businessId: { type: [string, 'null'] }
+        wabaId: { type: [string, 'null'] }
+        phoneNumberId: { type: [string, 'null'] }
+        accessToken: { type: string, writeOnly: true }
+        appSecret: { type: string, writeOnly: true }
+    MetaOutput:
+      type: object
+      required: [status]
+      properties:
+        app_id: { type: [string, 'null'] }
+        business_id: { type: [string, 'null'] }
+        waba_id: { type: [string, 'null'] }
+        phone_number_id: { type: [string, 'null'] }
+        status: { type: string }
+        updated_at: { type: [string, 'null'], format: date-time }
+  responses:
+    AuthSuccess:
+      description: Autenticação concluída
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/AuthResult' }
+    BadRequest:
+      description: Entrada inválida
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    Unauthorized:
+      description: Token ausente/inválido ou credenciais incorretas
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    Forbidden:
+      description: Sessão sem permissão
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    NotFound:
+      description: Recurso inexistente na organização
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    Conflict:
+      description: Duplicidade ou recurso em uso
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    InternalError:
+      description: Falha interna
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }

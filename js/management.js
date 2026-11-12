@@ -40,6 +40,7 @@ const loadDemoManagement = () => {
 };
 
 let management = apiMode() ? emptyManagement() : loadDemoManagement();
+let editingRoleId = null;
 const saveManagement = () => { if (!apiMode()) localStorage.setItem(MANAGEMENT_KEY, JSON.stringify(management)); };
 const managementId = prefix => `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2, 6)}`;
 const depById = id => management.departments.find(item => item.id === id);
@@ -66,7 +67,11 @@ const setManagementState = (text, ready = false) => {
 };
 
 const actionError = (error, fallback) => {
-  const message = error?.status === 403 ? 'Sua conta não possui permissão para esta ação.' : error?.message || fallback;
+  const code = error?.details?.code;
+  const message = error?.status === 403 ? 'Sua conta não possui permissão para esta ação.'
+    : code === 'LAST_ADMIN_PROTECTION' ? 'A organização precisa manter ao menos um acesso administrativo ativo.'
+      : code === 'ADMIN_CONFIRMATION_REQUIRED' ? 'Confirme a alteração da função administrativa antes de salvar.'
+        : error?.message || fallback;
   toast('⚠️', 'Operação não concluída', message, 'coral');
 };
 
@@ -109,13 +114,37 @@ function renderAdmin() {
   $('#adminDepartmentList').innerHTML = management.departments.map(item => `<span class="admin-item"><i class="department-dot ${item.color}"></i>${esc(item.name)}${can('organization:write') ? `<button data-remove-department="${item.id}" title="Excluir">×</button>` : ''}</span>`).join('');
   $('#roleList').innerHTML = management.roles.map(item => {
     const permissions = (item.permissions || []).map(permission => permissionLabels[permission] || permission).join(', ') || 'Sem permissões administrativas';
-    return `<div class="role-item"><b>${esc(item.name)}</b><small>${esc(item.description || '')}</small><small>${esc(permissions)}</small>${can('roles:write') ? `<button data-remove-role="${item.id}" title="Excluir">×</button>` : ''}</div>`;
+    return `<div class="role-item"><b>${esc(item.name)}</b><small>${esc(item.description || '')}</small><small>${esc(permissions)}</small>${can('roles:write') ? `<span style="margin-left:auto;display:flex;gap:5px"><button data-edit-role="${item.id}" title="Editar">Editar</button><button data-remove-role="${item.id}" title="Excluir">×</button></span>` : ''}</div>`;
   }).join('');
   $('#adminTagList').innerHTML = management.tags.map(tag => `<span class="tag">${esc(tag.name)} ${can('organization:write') ? `<button data-remove-tag="${tag.id}" title="Excluir">×</button>` : ''}</span>`).join('');
   setFormEnabled($('#departmentForm'), can('organization:write'));
   setFormEnabled($('#tagForm'), can('organization:write'));
   setFormEnabled($('#memberForm'), can('members:write'));
   setFormEnabled($('#roleForm'), can('roles:write'));
+  const editing = editingRoleId ? roleById(editingRoleId) : null;
+  $('#roleEditState').textContent = editing ? `Editando: ${editing.name}` : 'Criando uma nova função.';
+  $('#roleAdminWarning').hidden = !editing || !roleHasWildcard(editing.permissions);
+  $('#roleCancel').hidden = !editing;
+  $('#roleSubmit').textContent = editing ? 'Salvar alterações' : 'Adicionar privilégio';
+}
+
+const roleHasWildcard = permissions => Array.isArray(permissions) && permissions.includes('*');
+
+function beginRoleEdit(id) {
+  const role = roleById(id);
+  if (!role) return;
+  editingRoleId = id;
+  $('#roleName').value = role.name || '';
+  $('#roleDescription').value = role.description || '';
+  $$('input[name="rolePermission"]').forEach(input => { input.checked = (role.permissions || []).includes(input.value); });
+  renderAdmin();
+  $('#roleName').focus();
+}
+
+function cancelRoleEdit() {
+  editingRoleId = null;
+  $('#roleForm').reset();
+  renderAdmin();
 }
 
 function renderManagement() { renderMeta(); renderOrganization(); renderAdmin(); }
@@ -215,21 +244,40 @@ $('#roleForm').addEventListener('submit', async event => {
   event.preventDefault();
   const name = $('#roleName').value.trim();
   if (!name) return;
+  const editing = editingRoleId ? roleById(editingRoleId) : null;
+  let permissions = $$('input[name="rolePermission"]:checked').map(input => input.value);
+  let allowAdministrativeChange = false;
+  if (editing && roleHasWildcard(editing.permissions)) {
+    if (!window.confirm('Esta função possui acesso total (*). Deseja confirmar a alteração mantendo o acesso administrativo?')) return;
+    permissions = ['*'];
+    allowAdministrativeChange = true;
+  }
   const payload = {
     name,
     description: $('#roleDescription').value.trim(),
-    permissions: $$('input[name="rolePermission"]:checked').map(input => input.value)
+    permissions,
+    ...(allowAdministrativeChange ? { allowAdministrativeChange: true } : {})
   };
   try {
-    const role = apiMode()
-      ? await FluxoApi.request('/roles', { method: 'POST', body: payload })
-      : { id: managementId('role'), ...payload };
-    management.roles.push(role);
+    if (editing) {
+      const role = apiMode()
+        ? await FluxoApi.request(`/roles/${encodeURIComponent(editing.id)}`, { method: 'PATCH', body: payload })
+        : { ...editing, ...payload };
+      management.roles = management.roles.map(item => item.id === role.id ? role : item);
+      editingRoleId = null;
+    } else {
+      const role = apiMode()
+        ? await FluxoApi.request('/roles', { method: 'POST', body: payload })
+        : { id: managementId('role'), ...payload };
+      management.roles.push(role);
+    }
     event.target.reset();
     saveManagement(); renderOrganization(); renderAdmin();
-    toast('✓', 'Privilégio criado', `${name} está disponível para a equipe.`);
+    toast('✓', editing ? 'Privilégio atualizado' : 'Privilégio criado', `${name} está disponível para a equipe.`);
   } catch (error) { actionError(error, 'Não foi possível criar o privilégio.'); }
 });
+
+$('#roleCancel').onclick = cancelRoleEdit;
 
 $('#tagForm').addEventListener('submit', async event => {
   event.preventDefault();
@@ -248,8 +296,10 @@ $('#tagForm').addEventListener('submit', async event => {
 
 $('#view-admin').addEventListener('click', async event => {
   const departmentButton = event.target.closest('[data-remove-department]');
+  const editRoleButton = event.target.closest('[data-edit-role]');
   const roleButton = event.target.closest('[data-remove-role]');
   const tagButton = event.target.closest('[data-remove-tag]');
+  if (editRoleButton) return beginRoleEdit(editRoleButton.dataset.editRole);
   if (!departmentButton && !roleButton && !tagButton) return;
   try {
     if (departmentButton) {

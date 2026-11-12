@@ -91,6 +91,30 @@ test('recursos organizacionais permanecem isolados e respeitam permissões', asy
   });
   assert.equal(roleA.status, 201);
 
+  const updatedRoleA = await api(`/roles/${roleA.body.id}`, {
+    token: state.tokenA,
+    method: 'PATCH',
+    body: { name: `Atendimento Teste ${suffix}`, description: 'Atendimento atualizado', permissions: ['organization:write', 'members:write'] }
+  });
+  assert.equal(updatedRoleA.status, 200);
+  assert.equal(updatedRoleA.body.name, `Atendimento Teste ${suffix}`);
+  assert.deepEqual(updatedRoleA.body.permissions, ['organization:write', 'members:write']);
+
+  const hiddenRole = await api(`/roles/${roleA.body.id}`, {
+    token: state.tokenB,
+    method: 'PATCH',
+    body: { name: 'Não pertence', permissions: [] }
+  });
+  assert.equal(hiddenRole.status, 404);
+
+  const wildcardWithoutConfirmation = await api(`/roles/${roleA.body.id}`, {
+    token: state.tokenA,
+    method: 'PATCH',
+    body: { permissions: ['*'] }
+  });
+  assert.equal(wildcardWithoutConfirmation.status, 400);
+  assert.equal(wildcardWithoutConfirmation.body.code, 'ADMIN_CONFIRMATION_REQUIRED');
+
   const tagA = await api('/tags', { token: state.tokenA, method: 'POST', body: { name: `VIP ${suffix}` } });
   const tagB = await api('/tags', { token: state.tokenB, method: 'POST', body: { name: `B ${suffix}` } });
   assert.equal(tagA.status, 201);
@@ -385,6 +409,26 @@ test('recursos organizacionais permanecem isolados e respeitam permissões', asy
     body: { name: `Membro ${suffix}`, email: `member-${suffix}@example.test`, password, departmentId: departmentA.body.id, roleId: roleA.body.id }
   });
   assert.equal(memberA.status, 201);
+
+  const confirmedAdminUpdate = await api(`/roles/${state.adminA.roleId}`, {
+    token: state.tokenA,
+    method: 'PATCH',
+    body: { description: `Administrador preservado ${suffix}`, permissions: ['*'], allowAdministrativeChange: true }
+  });
+  assert.equal(confirmedAdminUpdate.status, 200);
+  assert.deepEqual(confirmedAdminUpdate.body.permissions, ['*']);
+
+  const removeLastAdmin = await api(`/roles/${state.adminA.roleId}`, {
+    token: state.tokenA,
+    method: 'PATCH',
+    body: { permissions: [], allowAdministrativeChange: true }
+  });
+  assert.equal(removeLastAdmin.status, 409);
+  assert.equal(removeLastAdmin.body.code, 'LAST_ADMIN_PROTECTION');
+
+  const deleteLastAdmin = await api(`/roles/${state.adminA.roleId}`, { token: state.tokenA, method: 'DELETE' });
+  assert.equal(deleteLastAdmin.status, 409);
+  assert.equal(deleteLastAdmin.body.code, 'LAST_ADMIN_PROTECTION');
 
   const updatedMember = await api(`/members/${memberA.body.id}`, {
     token: state.tokenA,

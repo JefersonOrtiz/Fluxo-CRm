@@ -174,6 +174,39 @@ const readPermissions = body => {
   return permissions;
 };
 
+const readRolePermissions = (body, { allowWildcard = false } = {}) => {
+  if (body.permissions === undefined) return undefined;
+  if (!Array.isArray(body.permissions) || body.permissions.length > ROLE_PERMISSIONS.length + (allowWildcard ? 1 : 0)) {
+    throw new HttpError(400, 'Permissões inválidas', 'VALIDATION_ERROR');
+  }
+  const permissions = [...new Set(body.permissions.map(value => String(value)))];
+  if (permissions.includes('*')) {
+    if (!allowWildcard) throw new HttpError(400, 'A permissão * é reservada ao administrador', 'VALIDATION_ERROR');
+    if (permissions.some(value => value !== '*')) throw new HttpError(400, 'Uma função administrativa deve usar somente *', 'VALIDATION_ERROR');
+    return permissions;
+  }
+  if (permissions.some(value => !ROLE_PERMISSIONS.includes(value))) {
+    throw new HttpError(400, 'Permissão desconhecida ou reservada', 'VALIDATION_ERROR');
+  }
+  return permissions;
+};
+
+const roleHasWildcard = permissions => Array.isArray(permissions) && permissions.includes('*');
+
+const assertAdministrativeRoleChange = async (queryable, { organizationId, roleId, currentPermissions, nextPermissions, confirmed }) => {
+  const currentAdmin = roleHasWildcard(currentPermissions);
+  const nextAdmin = roleHasWildcard(nextPermissions);
+  if ((currentAdmin || nextAdmin) && !confirmed) {
+    throw new HttpError(400, 'Alterações em função administrativa exigem confirmação explícita', 'ADMIN_CONFIRMATION_REQUIRED');
+  }
+  if (currentAdmin && !nextAdmin) {
+    const { rows: [{ count }] } = await queryable.query(`SELECT COUNT(*)::int count
+      FROM users u JOIN roles r ON r.id=u.role_id
+      WHERE u.organization_id=$1 AND u.active=true AND r.permissions @> '["*"]'::jsonb AND r.id<>$2`, [organizationId, roleId]);
+    if (!count) throw new HttpError(409, 'A organização não pode perder seu último acesso administrativo', 'LAST_ADMIN_PROTECTION');
+  }
+};
+
 const assertOwnedReference = async (pool, table, id, organizationId, label) => {
   if (!id) return null;
   const { rowCount } = await pool.query(`SELECT 1 FROM ${table} WHERE id=$1 AND organization_id=$2`, [id, organizationId]);
@@ -291,9 +324,49 @@ export function createRequestHandler({ pool, security, config }) {
         return json(response, 201, rows[0]);
       }
       const roleId = routeId(url.pathname, 'roles');
+      if (roleId && request.method === 'PATCH') {
+        const session = await auth(request, security, pool);
+        requirePermission(session, 'roles:write');
+        const body = await parseBody(request);
+        if (body.allowAdministrativeChange !== undefined && typeof body.allowAdministrativeChange !== 'boolean') {
+          throw new HttpError(400, 'Confirmação administrativa inválida', 'VALIDATION_ERROR');
+        }
+        const confirmed = body.allowAdministrativeChange === true;
+        const client = await pool.connect();
+        try {
+          await client.query('BEGIN');
+          await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1,0))', [`role:${session.organizationId}`]);
+          const currentResult = await client.query('SELECT id,name,description,permissions FROM roles WHERE id=$1 AND organization_id=$2 FOR UPDATE', [roleId, session.organizationId]);
+          if (!currentResult.rowCount) throw notFound('Privilégio');
+          const current = currentResult.rows[0];
+          const name = body.name === undefined ? current.name : requiredString(body, 'name', { max: 80, label: 'Nome' });
+          const description = body.description === undefined ? current.description : optionalString(body, 'description', { max: 500, label: 'Descrição' }) || '';
+          const nextPermissions = readRolePermissions(body, { allowWildcard: true }) ?? current.permissions;
+          if (body.name === undefined && body.description === undefined && body.permissions === undefined) {
+            throw new HttpError(400, 'Nenhum campo editável enviado', 'VALIDATION_ERROR');
+          }
+          await assertAdministrativeRoleChange(client, { organizationId: session.organizationId, roleId, currentPermissions: current.permissions, nextPermissions, confirmed });
+          const updated = await client.query('UPDATE roles SET name=$1,description=$2,permissions=$3 WHERE id=$4 AND organization_id=$5 RETURNING id,name,description,permissions,created_at "createdAt"', [name, description, JSON.stringify(nextPermissions), roleId, session.organizationId]);
+          await client.query('COMMIT');
+          return json(response, 200, updated.rows[0]);
+        } catch (error) {
+          await client.query('ROLLBACK');
+          throw error;
+        } finally {
+          client.release();
+        }
+      }
       if (roleId && request.method === 'DELETE') {
         const session = await auth(request, security, pool);
         requirePermission(session, 'roles:write');
+        const role = await pool.query('SELECT permissions FROM roles WHERE id=$1 AND organization_id=$2', [roleId, session.organizationId]);
+        if (!role.rowCount) throw notFound('Privilégio');
+        if (roleHasWildcard(role.rows[0].permissions)) {
+          const { rows: [{ count }] } = await pool.query(`SELECT COUNT(*)::int count
+            FROM users u JOIN roles r ON r.id=u.role_id
+            WHERE u.organization_id=$1 AND u.active=true AND r.permissions @> '["*"]'::jsonb AND r.id<>$2`, [session.organizationId, roleId]);
+          if (!count) throw new HttpError(409, 'A organização não pode perder seu último acesso administrativo', 'LAST_ADMIN_PROTECTION');
+        }
         const usage = await pool.query('SELECT 1 FROM users WHERE organization_id=$1 AND role_id=$2 LIMIT 1', [session.organizationId, roleId]);
         if (usage.rowCount) throw new HttpError(409, 'Privilégio em uso por colaboradores', 'RESOURCE_IN_USE');
         const result = await pool.query('DELETE FROM roles WHERE id=$1 AND organization_id=$2 RETURNING id', [roleId, session.organizationId]);
