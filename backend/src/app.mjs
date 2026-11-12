@@ -223,10 +223,14 @@ const notFound = label => new HttpError(404, `${label} não encontrado`, 'NOT_FO
 
 export function createRequestHandler({ pool, security, config }) {
   return async (request, response) => {
-    response.setHeader('Access-Control-Allow-Origin', config.corsOrigin);
-    response.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-    response.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
-    response.setHeader('Vary', 'Origin');
+    const origin = typeof request.headers.origin === 'string' ? request.headers.origin : '';
+    const corsAllowed = Boolean(origin) && Array.isArray(config.corsOrigins) && config.corsOrigins.includes(origin);
+    if (corsAllowed) {
+      response.setHeader('Access-Control-Allow-Origin', origin);
+      response.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+      response.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
+      response.setHeader('Vary', 'Origin');
+    }
     if (request.method === 'OPTIONS') return response.writeHead(204).end();
 
     const url = new URL(request.url, `http://${request.headers.host}`);

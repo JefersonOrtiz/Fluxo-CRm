@@ -5,6 +5,19 @@ import { fileURLToPath } from 'node:url';
 const envPath = fileURLToPath(new URL('../.env', import.meta.url));
 if (existsSync(envPath)) loadEnvFile(envPath);
 
+export function parseCorsOrigins(value) {
+  const origins = String(value || '').split(',').map(origin => origin.trim()).filter(Boolean);
+  if (origins.includes('*')) throw new Error('CORS_ORIGIN não pode usar *; informe uma allowlist explícita');
+  for (const origin of origins) {
+    let parsed;
+    try { parsed = new URL(origin); } catch { throw new Error(`Origem CORS inválida: ${origin}`); }
+    if (!['http:', 'https:'].includes(parsed.protocol) || parsed.origin !== origin || parsed.pathname !== '/' || parsed.search || parsed.hash) {
+      throw new Error(`Origem CORS inválida: ${origin}`);
+    }
+  }
+  return Object.freeze([...new Set(origins)]);
+}
+
 export function loadConfig() {
   const errors = [];
   if (!process.env.DATABASE_URL) errors.push('DATABASE_URL é obrigatória');
@@ -19,7 +32,7 @@ export function loadConfig() {
     databaseUrl: process.env.DATABASE_URL,
     jwtSecret: process.env.JWT_SECRET,
     encryptionKey,
-    corsOrigin: process.env.CORS_ORIGIN || '*',
+    corsOrigins: parseCorsOrigins(process.env.CORS_ORIGIN),
     metaVerifyToken: process.env.META_VERIFY_TOKEN || '',
     bootstrapSecret: process.env.BOOTSTRAP_SECRET || ''
   });
