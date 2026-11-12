@@ -20,7 +20,18 @@
   const profileMenu = document.querySelector('#profileMenu');
   const profileButton = document.querySelector('#railUser');
   const closeProfileMenu = () => { profileMenu.hidden = true; profileButton.setAttribute('aria-expanded', 'false'); };
-  profileButton.addEventListener('click', event => { event.stopPropagation(); profileMenu.hidden = !profileMenu.hidden; profileButton.setAttribute('aria-expanded', String(!profileMenu.hidden)); });
+  const positionProfileMenu = () => {
+    const rect = profileButton.getBoundingClientRect();
+    const width = Math.min(220, window.innerWidth - 16);
+    const left = Math.max(8, Math.min(rect.right + 8, window.innerWidth - width - 8));
+    const top = Math.max(8, Math.min(rect.top - 8, window.innerHeight - 190));
+    profileMenu.style.width = `${width}px`;
+    profileMenu.style.left = `${left}px`;
+    profileMenu.style.top = `${top}px`;
+    profileMenu.style.bottom = 'auto';
+  };
+  profileButton.addEventListener('click', event => { event.stopPropagation(); profileMenu.hidden = !profileMenu.hidden; if (!profileMenu.hidden) positionProfileMenu(); profileButton.setAttribute('aria-expanded', String(!profileMenu.hidden)); });
+  window.addEventListener('resize', () => { if (!profileMenu.hidden) positionProfileMenu(); });
   profileMenu.addEventListener('click', event => {
     const item = event.target.closest('[data-settings-section]');
     if (!item) return;
