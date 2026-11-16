@@ -40,7 +40,7 @@
     logoutButton.hidden = false;
     notice.hidden = false;
     notice.className = 'runtime-notice api';
-    notice.textContent = 'CRM conectado à API · envio externo e Aurora ainda não integrados';
+    notice.textContent = 'CRM conectado à API · sugestões da Aurora disponíveis · envio externo ainda não integrado';
     updateSessionIdentity(session);
   };
 

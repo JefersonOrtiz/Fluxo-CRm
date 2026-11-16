@@ -1,0 +1,48 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: fluxo_crm_aurora_demo
+      POSTGRES_USER: aurora_demo
+      POSTGRES_PASSWORD: ${AURORA_DEMO_POSTGRES_PASSWORD:?Defina AURORA_DEMO_POSTGRES_PASSWORD}
+    volumes:
+      - aurora_demo_postgres_data:/var/lib/postgresql/data
+      - ./database/init.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U aurora_demo -d fluxo_crm_aurora_demo"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build: ./backend
+    environment:
+      PORT: 3001
+      NODE_ENV: development
+      AI_PROVIDER: ${AI_PROVIDER:-openai}
+      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4o-mini}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      DATABASE_URL: postgresql://aurora_demo:${AURORA_DEMO_POSTGRES_PASSWORD}@postgres:5432/fluxo_crm_aurora_demo
+      JWT_SECRET: ${AURORA_DEMO_JWT_SECRET:?Defina AURORA_DEMO_JWT_SECRET}
+      ENCRYPTION_KEY: ${AURORA_DEMO_ENCRYPTION_KEY:?Defina AURORA_DEMO_ENCRYPTION_KEY}
+      BOOTSTRAP_SECRET: ${AURORA_DEMO_BOOTSTRAP_SECRET:?Defina AURORA_DEMO_BOOTSTRAP_SECRET}
+      CORS_ORIGIN: http://localhost:8180
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:3101:3001"
+
+  web:
+    image: nginx:1.27-alpine
+    volumes:
+      - ./:/usr/share/nginx/html:ro
+      - ./nginx/aurora-demo.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      - api
+    ports:
+      - "127.0.0.1:8180:80"
+
+volumes:
+  aurora_demo_postgres_data:
+    name: jf-crm-aurora-demo-postgres-data

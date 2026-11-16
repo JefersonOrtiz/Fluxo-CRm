@@ -56,12 +56,118 @@ function renderApiContacts() {
     <td class="mono" style="color:var(--jade);font-weight:600">${contactMoney(contact.valueCents)}</td>
     <td>${contact.tags.slice(0, 3).map(tag => `<span class="tag" style="margin-right:4px">${esc(tag.name)}</span>`).join('') || '—'}</td>
     <td><span class="ia-dot" style="background:var(--dim)"></span>não integrada</td></tr>`).join('') || '<tr><td colspan="6" class="empty-state">Nenhum contato encontrado.</td></tr>';
+  renderContactActions();
   const page = contactListState.pageInfo;
   $('#ctPageInfo').textContent = page ? `Página ${page.number} de ${Math.max(1, page.totalPages)} · ${page.total} contatos` : '—';
   $('#ctPrev').disabled = !page || page.number <= 1 || contactListState.loading;
   $('#ctNext').disabled = !page || page.number >= page.totalPages || contactListState.loading;
   $$('[data-open-contact]').forEach(button => { button.disabled = !contactCanWrite(); });
 }
+
+function renderContactActions() {
+  $('#ctBody td[colspan="6"]')?.setAttribute('colspan', '7');
+  $('#ctBody').querySelectorAll('tr[data-id]').forEach(row => {
+    if (row.querySelector('[data-contact-action]')) return;
+    const name = row.querySelector('td b')?.textContent || 'cliente';
+    row.insertAdjacentHTML('beforeend', `<td><div class="contact-actions" role="group" aria-label="Ações de ${esc(name)}">
+      <button class="contact-action" type="button" data-contact-action="edit" data-id="${row.dataset.id}" title="Editar cliente" aria-label="Editar cliente"><span aria-hidden="true">✎</span></button>
+      <button class="contact-action" type="button" data-contact-action="conversation" data-id="${row.dataset.id}" title="Ver conversa" aria-label="Ver conversa"><span aria-hidden="true">💬</span></button>
+      <button class="contact-action danger" type="button" data-contact-action="delete" data-id="${row.dataset.id}" title="Excluir cliente" aria-label="Excluir cliente"><span aria-hidden="true">🗑</span></button>
+    </div></td>`);
+    row.querySelectorAll('[data-contact-action="edit"],[data-contact-action="delete"]').forEach(button => { button.disabled = !contactCanWrite(); });
+  });
+}
+
+async function openExistingContactConversation(contactId) {
+  if (!apiContactsMode()) { openChat(contactId); switchView('chat'); return; }
+  try {
+    const result = await FluxoApi.request(`/conversations?${new URLSearchParams({ contactId, limit: '1' })}`);
+    const conversation = result.items?.[0];
+    if (!conversation) { toast('💬', 'Sem conversa', 'Este cliente ainda não possui uma conversa registrada.', 'gold'); return; }
+    await openApiConversation(conversation.id);
+    switchView('chat');
+  } catch (error) { conversationError(error, 'Não foi possível localizar a conversa.'); }
+}
+
+let contactDeleteDialog = null;
+const closeContactDeleteDialog = confirmed => {
+  if (!contactDeleteDialog) return;
+  const dialog = contactDeleteDialog;
+  contactDeleteDialog = null;
+  $('#contactDeleteModal').classList.remove('open');
+  $('#contactDeleteModal').hidden = true;
+  $('#contactDeleteModal').setAttribute('aria-hidden', 'true');
+  dialog.resolve(confirmed);
+};
+function showContactDeleteDialog(contact, impact) {
+  $('#contactDeleteName').textContent = contact.name;
+  $('#contactDeleteConversations').textContent = impact.conversations;
+  $('#contactDeleteMessages').textContent = impact.messages;
+  $('#contactDeleteTags').textContent = impact.tagAssociations;
+  const modal = $('#contactDeleteModal');
+  modal.hidden = false; modal.setAttribute('aria-hidden', 'false'); modal.classList.add('open');
+  $('#contactDeleteConfirm').disabled = false; $('#contactDeleteCancel').disabled = false;
+  requestAnimationFrame(() => $('#contactDeleteConfirm').focus());
+  return new Promise(resolve => { contactDeleteDialog = { resolve }; });
+}
+$('#contactDeleteCancel').addEventListener('click', () => closeContactDeleteDialog(false));
+$('#contactDeleteClose').addEventListener('click', () => closeContactDeleteDialog(false));
+$('#contactDeleteConfirm').addEventListener('click', () => closeContactDeleteDialog(true));
+$('#contactDeleteModal').addEventListener('click', event => { if (event.target.id === 'contactDeleteModal') closeContactDeleteDialog(false); });
+document.addEventListener('keydown', event => { if (event.key === 'Escape' && contactDeleteDialog) { event.preventDefault(); closeContactDeleteDialog(false); } });
+
+const contactDeleteError = (error, fallback) => {
+  const message = error?.status === 401 ? 'Sua sessão expirou. Entre novamente para continuar.'
+    : error?.status === 403 ? 'Sua conta não possui permissão para excluir clientes.'
+      : error?.status === 404 ? 'O cliente não foi encontrado. A lista pode estar desatualizada.'
+        : error?.status === 409 ? 'O cliente foi alterado por outra pessoa. Recarregue a lista e confirme novamente.'
+          : error?.message || fallback;
+  toast('⚠️', 'Exclusão não concluída', message, 'coral');
+};
+
+const readContactImpact = impact => {
+  const fields = ['conversations', 'messages', 'tagAssociations'];
+  if (!impact || fields.some(field => !Number.isInteger(impact[field]) || impact[field] < 0)) throw new Error('A API retornou um impacto de exclusão incompleto.');
+  return impact;
+};
+
+async function deleteContact(contactId) {
+  const contact = apiContactsMode() ? findApiContact(contactId) : byId(contactId);
+  if (!contact || !contactCanWrite()) return;
+  let impact = { conversations: '—', messages: '—', tagAssociations: '—' };
+  if (apiContactsMode()) {
+    try {
+      impact = readContactImpact(await FluxoApi.request(`/contacts/${encodeURIComponent(contactId)}/impact`));
+    } catch (error) { contactDeleteError(error, 'Não foi possível verificar o impacto da exclusão.'); return; }
+  }
+  const confirmed = await showContactDeleteDialog(contact, impact);
+  if (!confirmed) return;
+  try {
+    if (apiContactsMode()) {
+      $('#contactDeleteConfirm').disabled = true; $('#contactDeleteCancel').disabled = true;
+      await FluxoApi.request(`/contacts/${encodeURIComponent(contactId)}`, { method: 'DELETE', body: { expectedVersion: contact.version, confirmCascade: true } });
+      closeContactDeleteDialog(false);
+      contactListState.loaded = false; contactBoardState.loaded = false;
+      await Promise.all([loadApiContacts({ page: contactListState.page }), loadApiKanban()]);
+      window.loadDashboardMetrics?.();
+    } else {
+      const index = contacts.findIndex(item => item.id === contactId);
+      if (index >= 0) contacts.splice(index, 1);
+      renderContacts(); renderKanban();
+    }
+    toast('🗑', 'Cliente excluído', `${contact.name} foi removido.`, 'coral');
+  } catch (error) { closeContactDeleteDialog(false); contactDeleteError(error, 'Não foi possível excluir o cliente.'); }
+}
+
+$('#ctBody').addEventListener('click', event => {
+  const action = event.target.closest('[data-contact-action]');
+  if (!action) return;
+  event.preventDefault(); event.stopPropagation();
+  const id = action.dataset.id;
+  if (action.dataset.contactAction === 'edit') openModal('contact', id);
+  if (action.dataset.contactAction === 'conversation') openExistingContactConversation(id);
+  if (action.dataset.contactAction === 'delete') deleteContact(id);
+});
 
 async function loadApiKanban() {
   if (!apiContactsMode() || !window.FluxoApi?.getSession() || contactBoardState.loading) return;
@@ -166,6 +272,7 @@ async function saveContactModal() {
       if (contactEditing) await FluxoApi.request(`/contacts/${encodeURIComponent(contactEditing.id)}`, { method: 'PATCH', body: { ...payload, expectedVersion: contactEditing.version } });
       else await FluxoApi.request('/contacts', { method: 'POST', body: payload });
       await Promise.all([loadApiContacts({ page: contactListState.page }), loadApiKanban()]);
+      window.loadDashboardMetrics?.();
     } else if (contactEditing) {
       Object.assign(contactEditing, { ...payload, value: payload.valueCents / 100, mail: payload.email, tags: management.tags.filter(tag => tagIds.includes(tag.id)).map(tag => tag.name) });
       renderContacts(); renderKanban();

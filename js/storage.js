@@ -12,6 +12,7 @@ window.setFluxoUserName = name => {
 };
 
 function persistCrm() {
+  if (window.FLUXO_CONFIG?.mode === 'api') return;
   try {
     localStorage.setItem(FLUXO_STORAGE_KEY, JSON.stringify({ contacts, events }));
   } catch (error) {
@@ -20,6 +21,7 @@ function persistCrm() {
 }
 
 function restoreCrm() {
+  if (window.FLUXO_CONFIG?.mode === 'api') return;
   try {
     const raw = localStorage.getItem(FLUXO_STORAGE_KEY);
     if (!raw) return persistCrm();

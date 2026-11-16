@@ -1,11 +1,13 @@
 import { timingSafeEqual } from 'node:crypto';
 import { databaseError, email, HttpError, json, optionalString, parseBody, requiredString, routeId } from './http.mjs';
+import { buildSuggestionContext, createRateLimiter } from './openai.mjs';
 
 export const ROLE_PERMISSIONS = Object.freeze([
   'organization:write',
   'contacts:write',
   'conversations:write',
   'messages:write',
+  'ai:suggestions',
   'events:write',
   'members:write',
   'roles:write',
@@ -13,6 +15,7 @@ export const ROLE_PERMISSIONS = Object.freeze([
 ]);
 
 const CONTACT_STAGES = Object.freeze(['Novo lead', 'Qualificação', 'Proposta', 'Negociação', 'Fechamento']);
+const AI_COMMERCIAL_TAGS = new Set(['interesse-produto', 'origem-campanha', 'prioridade', 'segmento-comercial', 'intenção-demo']);
 const CONTACT_SORTS = Object.freeze({
   updatedAt: 'c.updated_at',
   name: 'c.name',
@@ -21,7 +24,7 @@ const CONTACT_SORTS = Object.freeze({
 });
 const CONTACT_SELECT = `SELECT c.id,c.name,c.phone,c.email,c.company,c.stage,c.value_cents "valueCents",c.created_at "createdAt",c.updated_at "updatedAt",c.xmin::text version,COALESCE(json_agg(json_build_object('id',t.id,'name',t.name,'color',t.color) ORDER BY t.name) FILTER (WHERE t.id IS NOT NULL),'[]'::json) tags FROM contacts c LEFT JOIN contact_tags ct ON ct.contact_id=c.id LEFT JOIN tags t ON t.id=ct.tag_id`;
 const CONVERSATION_STATUSES = Object.freeze(['open', 'closed']);
-const CONVERSATION_SELECT = `SELECT cv.id,cv.channel,cv.status,cv.contact_id "contactId",cv.assigned_user_id "assignedUserId",cv.created_at "createdAt",cv.updated_at "updatedAt",cv.xmin::text version,c.name "contactName",c.company "contactCompany",c.phone "contactPhone",u.name "assignedUserName",lm.id "latestMessageId",lm.body "latestMessageBody",lm.direction "latestMessageDirection",lm.sender_type "latestMessageSenderType",lm.status "latestMessageStatus",lm.sent_at "latestMessageSentAt" FROM conversations cv JOIN contacts c ON c.id=cv.contact_id LEFT JOIN users u ON u.id=cv.assigned_user_id LEFT JOIN LATERAL (SELECT m.id,m.body,m.direction,m.sender_type,m.status,m.sent_at FROM messages m WHERE m.conversation_id=cv.id ORDER BY m.sent_at DESC,m.id DESC LIMIT 1) lm ON true`;
+const CONVERSATION_SELECT = `SELECT cv.id,cv.channel,cv.status,cv.contact_id "contactId",cv.assigned_user_id "assignedUserId",cv.created_at "createdAt",cv.updated_at "updatedAt",cv.xmin::text version,c.name "contactName",c.company "contactCompany",c.phone "contactPhone",c.stage "contactStage",u.name "assignedUserName",lm.id "latestMessageId",lm.body "latestMessageBody",lm.direction "latestMessageDirection",lm.sender_type "latestMessageSenderType",lm.status "latestMessageStatus",lm.sent_at "latestMessageSentAt" FROM conversations cv JOIN contacts c ON c.id=cv.contact_id LEFT JOIN users u ON u.id=cv.assigned_user_id LEFT JOIN LATERAL (SELECT m.id,m.body,m.direction,m.sender_type,m.status,m.sent_at FROM messages m WHERE m.conversation_id=cv.id ORDER BY m.sent_at DESC,m.id DESC LIMIT 1) lm ON true`;
 const MESSAGE_SELECT = `SELECT id,conversation_id "conversationId",direction,sender_type "senderType",body,client_message_id "clientMessageId",provider_message_id "providerMessageId",status,sent_at "sentAt" FROM messages`;
 const EVENT_TYPES = Object.freeze(['reuniao', 'followup', 'entrega', 'lead']);
 const EVENT_SELECT = `SELECT e.id,e.title,e.type,e.start_at "startAt",e.end_at "endAt",e.timezone,e.contact_id "contactId",e.assigned_user_id "assignedUserId",e.created_at "createdAt",e.updated_at "updatedAt",e.xmin::text version,c.name "contactName",c.company "contactCompany",u.name "assignedUserName" FROM events e LEFT JOIN contacts c ON c.id=e.contact_id LEFT JOIN users u ON u.id=e.assigned_user_id`;
@@ -43,6 +46,26 @@ const conversationOutput = row => ({ ...row, nextCursor: undefined });
 const getConversation = async (queryable, conversationId, organizationId) => {
   const { rows } = await queryable.query(`${CONVERSATION_SELECT} WHERE cv.id=$1 AND cv.organization_id=$2`, [conversationId, organizationId]);
   return rows[0] ? conversationOutput(rows[0]) : null;
+};
+
+const normalizeAiTagName = value => String(value || '').trim().toLocaleLowerCase('pt-BR').normalize('NFC');
+const getAuthorizedConversationTags = async (queryable, conversationId, organizationId) => {
+  const { rows } = await queryable.query(`SELECT DISTINCT t.name
+    FROM conversations cv
+    JOIN contacts c ON c.id=cv.contact_id AND c.organization_id=$2
+    JOIN contact_tags ct ON ct.contact_id=c.id
+    JOIN tags t ON t.id=ct.tag_id AND t.organization_id=$2
+    WHERE cv.id=$1 AND cv.organization_id=$2
+    ORDER BY t.name
+    LIMIT 50`, [conversationId, organizationId]);
+  const tags = [];
+  const seen = new Set();
+  for (const row of rows) {
+    const name = normalizeAiTagName(row.name);
+    if (name.length > 60 || !AI_COMMERCIAL_TAGS.has(name) || seen.has(name)) continue;
+    seen.add(name); tags.push(name);
+  }
+  return tags;
 };
 
 const getEvent = async (queryable, eventId, organizationId) => {
@@ -221,7 +244,9 @@ const assertOwnedReference = async (pool, table, id, organizationId, label) => {
 
 const notFound = label => new HttpError(404, `${label} não encontrado`, 'NOT_FOUND');
 
-export function createRequestHandler({ pool, security, config }) {
+export function createRequestHandler({ pool, security, config, aiProvider }) {
+  const allowAiOrganization = createRateLimiter({ windowMs: 60_000, max: 30 });
+  const allowAiUser = createRateLimiter({ windowMs: 60_000, max: 10 });
   return async (request, response) => {
     response.setHeader('Access-Control-Allow-Origin', config.corsOrigin);
     response.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
@@ -506,7 +531,51 @@ export function createRequestHandler({ pool, security, config }) {
         if (!result.rowCount) throw notFound('Tag');
         return response.writeHead(204).end();
       }
+      // Indicadores reais do Dashboard
+      if (url.pathname === '/api/dashboard' && request.method === 'GET') {
+        const session = await auth(request, security, pool);
+        const organizationId = session.organizationId;
 
+        const [conversationsResult, leadsResult, negotiationResult, pipelineResult] =
+        await Promise.all([
+        pool.query(
+          `SELECT COUNT(*)::int AS total
+          FROM conversations
+          WHERE organization_id = $1 AND status = 'open'`,
+          [organizationId]
+        ),
+
+        pool.query(
+          `SELECT COUNT(*)::int AS total
+          FROM contacts
+          WHERE organization_id = $1
+           AND created_at >= NOW() - INTERVAL '7 days'`,
+          [organizationId]
+        ),
+
+        pool.query(
+          `SELECT COALESCE(SUM(value_cents), 0)::bigint AS total
+          FROM contacts
+          WHERE organization_id = $1 AND stage = $2`,
+          [organizationId, 'Negociação']
+        ),
+
+        pool.query(
+          `SELECT COALESCE(SUM(value_cents), 0)::bigint AS total
+          FROM contacts
+          WHERE organization_id = $1 AND stage = ANY($2::text[])`,
+          [organizationId, CONTACT_STAGES]
+        )
+      ]);
+
+      return json(response, 200, {
+        activeConversations: conversationsResult.rows[0].total,
+        newLeads7d: leadsResult.rows[0].total,
+        negotiationValueCents: Number(negotiationResult.rows[0].total),
+        pipelineValueCents: Number(pipelineResult.rows[0].total),
+        aiResolvedPercent: null
+      });
+      }
       if (url.pathname === '/api/contacts' && request.method === 'GET') {
         const session = await auth(request, security, pool);
         const page = Math.max(1, Number.parseInt(url.searchParams.get('page') || '1', 10) || 1);
@@ -550,6 +619,7 @@ export function createRequestHandler({ pool, security, config }) {
         }
       }
       const contactId = routeId(url.pathname, 'contacts');
+      const contactImpactId = url.pathname.match(/^\/api\/contacts\/([^/]+)\/impact$/)?.[1] || null;
       if (contactId && request.method === 'GET') {
         const session = await auth(request, security, pool);
         const contact = await getContact(pool, contactId, session.organizationId);
@@ -592,16 +662,49 @@ export function createRequestHandler({ pool, security, config }) {
         }
       }
 
+      if (contactImpactId && request.method === 'GET') {
+        const session = await auth(request, security, pool);
+        const contact = await getContact(pool, decodeURIComponent(contactImpactId), session.organizationId);
+        if (!contact) throw notFound('Contato');
+        const { rows } = await pool.query(`
+          SELECT
+            (SELECT COUNT(*)::int FROM conversations WHERE organization_id=$1 AND contact_id=$2) AS conversations,
+            (SELECT COUNT(*)::int FROM messages m JOIN conversations cv ON cv.id=m.conversation_id WHERE cv.organization_id=$1 AND cv.contact_id=$2) AS messages,
+            (SELECT COUNT(*)::int FROM contact_tags WHERE contact_id=$2) AS "tagAssociations"`, [session.organizationId, decodeURIComponent(contactImpactId)]);
+        return json(response, 200, {
+          conversations: rows[0].conversations,
+          messages: rows[0].messages,
+          tagAssociations: rows[0].tagAssociations
+        });
+      }
+
+      if (contactId && request.method === 'DELETE') {
+        const session = await auth(request, security, pool);
+        requirePermission(session, 'contacts:write');
+        const body = await parseBody(request);
+        const expectedVersion = requiredString(body, 'expectedVersion', { max: 32, label: 'Versão esperada' });
+        if (body.confirmCascade !== true) throw new HttpError(400, 'A confirmação da exclusão é obrigatória', 'CONFIRMATION_REQUIRED');
+        const deleted = await pool.query('DELETE FROM contacts WHERE id=$1 AND organization_id=$2 AND xmin::text=$3 RETURNING id', [contactId, session.organizationId, expectedVersion]);
+        if (!deleted.rowCount) {
+          const exists = await pool.query('SELECT 1 FROM contacts WHERE id=$1 AND organization_id=$2', [contactId, session.organizationId]);
+          if (!exists.rowCount) throw notFound('Contato');
+          throw new HttpError(409, 'O contato foi alterado por outro usuário; recarregue antes de excluir', 'STALE_WRITE');
+        }
+        return response.writeHead(204).end();
+      }
+
       if (url.pathname === '/api/conversations' && request.method === 'GET') {
         const session = await auth(request, security, pool);
         const limit = Math.min(100, Math.max(1, Number.parseInt(url.searchParams.get('limit') || '30', 10) || 30));
         const status = url.searchParams.get('status') || '';
+        const contactId = (url.searchParams.get('contactId') || '').trim();
         const search = (url.searchParams.get('q') || '').trim().slice(0, 120);
         const cursor = decodeCursor(url.searchParams.get('cursor'));
         if (status && !CONVERSATION_STATUSES.includes(status)) throw new HttpError(400, 'Estado da conversa inválido', 'VALIDATION_ERROR');
         const values = [session.organizationId];
         const where = ['cv.organization_id=$1'];
         if (status) { values.push(status); where.push(`cv.status=$${values.length}`); }
+        if (contactId) { values.push(contactId); where.push(`cv.contact_id=$${values.length}`); }
         if (search) { values.push(`%${search}%`); where.push(`(c.name ILIKE $${values.length} OR COALESCE(c.company,'') ILIKE $${values.length})`); }
         if (cursor) {
           values.push(cursor.timestamp, cursor.id);
@@ -691,6 +794,34 @@ export function createRequestHandler({ pool, security, config }) {
           throw error;
         } finally {
           client.release();
+        }
+      }
+
+      const aiSuggestionsMatch = url.pathname.match(/^\/api\/conversations\/([^/]+)\/ai-suggestions$/);
+      if (aiSuggestionsMatch && request.method === 'POST') {
+        const session = await auth(request, security, pool);
+        requirePermission(session, 'ai:suggestions');
+        const conversationId = decodeURIComponent(aiSuggestionsMatch[1]);
+        if (!allowAiOrganization(`org:${session.organizationId}`) || !allowAiUser(`user:${session.userId}`)) {
+          throw new HttpError(429, 'Limite de sugestões atingido; tente novamente em instantes', 'AI_RATE_LIMITED');
+        }
+        const conversation = await getConversation(pool, conversationId, session.organizationId);
+        if (!conversation) throw notFound('Conversa');
+        const commercialTags = await getAuthorizedConversationTags(pool, conversationId, session.organizationId);
+        const { rows } = await pool.query(`${MESSAGE_SELECT} WHERE conversation_id=$1 ORDER BY sent_at DESC,id DESC LIMIT 20`, [conversationId]);
+        const contactStage = CONTACT_STAGES.includes(conversation.contactStage) ? conversation.contactStage : '';
+        const context = buildSuggestionContext(rows.reverse(), contactStage, commercialTags);
+        if (!aiProvider) throw new HttpError(503, 'Sugestões da Aurora indisponíveis', 'AI_NOT_CONFIGURED');
+        try {
+          const result = await aiProvider.suggest({ context });
+          const suggestions = Array.isArray(result?.suggestions) ? result.suggestions.map(value => String(value).slice(0, 500)).filter(Boolean).slice(0, 2) : [];
+          if (!suggestions.length) throw new Error('empty suggestions');
+          return json(response, 200, { suggestions });
+        } catch (error) {
+          if (error?.code === 'AI_RATE_LIMITED') throw new HttpError(429, 'O provedor de IA está temporariamente limitado', 'AI_RATE_LIMITED');
+          if (error?.code === 'AI_TIMEOUT') throw new HttpError(504, 'A Aurora demorou demais para responder', 'AI_TIMEOUT');
+          if (error?.code === 'AI_NOT_CONFIGURED') throw new HttpError(503, 'Sugestões da Aurora indisponíveis', 'AI_NOT_CONFIGURED');
+          throw new HttpError(502, 'Não foi possível gerar sugestões agora', 'AI_PROVIDER_ERROR');
         }
       }
 

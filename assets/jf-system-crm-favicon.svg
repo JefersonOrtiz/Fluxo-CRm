@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="JF System CRM">
+  <rect width="64" height="64" rx="14" fill="#061b15"/>
+  <path d="M16 13h32a7 7 0 0 1 7 7v21a7 7 0 0 1-7 7H31l-9 7v-7h-6a7 7 0 0 1-7-7V20a7 7 0 0 1 7-7Z" fill="#087c58"/>
+  <path d="m17 38 9-9 7 6 14-15" fill="none" stroke="#39f06f" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="m42 20 5-1-1 5" fill="none" stroke="#39f06f" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

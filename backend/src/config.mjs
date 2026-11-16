@@ -21,6 +21,9 @@ export function loadConfig() {
     encryptionKey,
     corsOrigin: process.env.CORS_ORIGIN || '*',
     metaVerifyToken: process.env.META_VERIFY_TOKEN || '',
-    bootstrapSecret: process.env.BOOTSTRAP_SECRET || ''
+    bootstrapSecret: process.env.BOOTSTRAP_SECRET || '',
+    openAiApiKey: process.env.OPENAI_API_KEY || '',
+    openAiModel: process.env.OPENAI_MODEL || 'gpt-4o-mini',
+    aiProvider: process.env.AI_PROVIDER || 'openai'
   });
 }

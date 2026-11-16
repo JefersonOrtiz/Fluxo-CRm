@@ -4,12 +4,14 @@ import { createRequestHandler } from './src/app.mjs';
 import { loadConfig } from './src/config.mjs';
 import { createSecurity } from './src/security.mjs';
 import { runMigrations } from './src/migrations.mjs';
+import { createAiProvider } from './src/openai.mjs';
 
 const config = loadConfig();
 const pool = new Pool({ connectionString: config.databaseUrl });
 const security = createSecurity(config);
 await runMigrations(pool);
-const server = createServer(createRequestHandler({ pool, security, config }));
+const aiProvider = createAiProvider({ apiKey: config.openAiApiKey, model: config.openAiModel, provider: config.aiProvider });
+const server = createServer(createRequestHandler({ pool, security, config, aiProvider }));
 
 const shutdown = signal => {
   console.log(`${signal} recebido; encerrando a API.`);
