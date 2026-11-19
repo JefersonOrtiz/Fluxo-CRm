@@ -1,4 +1,4 @@
-# Aurora — sugestões com OpenAI (Etapa 2A)
+# Aurora — sugestões com provedor configurável
 
 Esta etapa oferece somente sugestões para revisão humana. Nenhuma sugestão é gravada em `messages` e nenhuma mensagem é enviada ao cliente.
 
@@ -6,7 +6,22 @@ Esta etapa oferece somente sugestões para revisão humana. Nenhuma sugestão é
 
 - `OPENAI_API_KEY`: segredo exclusivo do processo backend; nunca deve ser exposto ao frontend ou versionado.
 - `OPENAI_MODEL`: modelo configurável (padrão `gpt-4o-mini`).
-- `AI_PROVIDER`: `openai` por padrão; `mock` somente para testes locais explícitos. O backend rejeita `mock` quando `NODE_ENV=production`.
+- `AI_PROVIDER`: `mock` por padrão seguro em desenvolvimento e demonstração.
+- `OPENAI_ENABLED`: `false` por padrão; deve ser `true` somente para uma ativação explícita da OpenAI.
+
+Estados do provedor:
+
+- `mock`: simulação local determinística, sem chamadas externas ou custos de OpenAI. O backend rejeita `mock` quando `NODE_ENV=production`.
+- OpenAI desabilitada: ocorre quando `AI_PROVIDER=openai` mas `OPENAI_ENABLED` não é `true`; nenhum provedor real fica ativo e as sugestões ficam indisponíveis com erro seguro.
+- OpenAI habilitada: exige simultaneamente `AI_PROVIDER=openai`, `OPENAI_ENABLED=true` e `OPENAI_API_KEY` válida configurada no servidor. Não há fallback automático para `mock` em caso de configuração incompleta.
+
+Para ativação futura e explícita:
+
+```text
+AI_PROVIDER=openai
+OPENAI_ENABLED=true
+OPENAI_API_KEY=<configurada somente no ambiente seguro do backend>
+```
 
 ## Limites atuais
 

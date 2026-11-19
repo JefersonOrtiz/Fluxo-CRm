@@ -1,5 +1,6 @@
 (function exposeFluxoApi(root) {
   const SESSION_KEY = 'fluxo-crm:session:v1';
+  const PLATFORM_ACCESS_KEY = 'fluxo-crm:platform-access:v1';
   const DEFAULT_TIMEOUT_MS = 8_000;
 
   class ApiError extends Error {
@@ -26,7 +27,7 @@
     const readSession = () => {
       try {
         const value = JSON.parse(storage.getItem(SESSION_KEY));
-        return value?.token && value?.user ? value : null;
+        return value?.user && (value?.token || value?.platformAccess) ? value : null;
       } catch {
         storage.removeItem(SESSION_KEY);
         return null;
@@ -34,12 +35,15 @@
     };
 
     const writeSession = session => {
-      if (!session?.token || !session?.user) throw new ApiError('Sessão inválida recebida da API', { code: 'INVALID_RESPONSE' });
-      storage.setItem(SESSION_KEY, JSON.stringify({ token: session.token, user: session.user }));
+      if ((!session?.token && !session?.platformAccessToken) || !session?.user) throw new ApiError('Sessão inválida recebida da API', { code: 'INVALID_RESPONSE' });
+      if (session.platformAccessToken) storage.setItem(PLATFORM_ACCESS_KEY, session.platformAccessToken);
+      else storage.removeItem(PLATFORM_ACCESS_KEY);
+      storage.setItem(SESSION_KEY, JSON.stringify({ token: session.token || null, user: session.user, platformAccess: Boolean(session.platformAccessToken) }));
       return readSession();
     };
 
-    const clearSession = () => storage.removeItem(SESSION_KEY);
+    const readPlatformAccess = () => storage.getItem(PLATFORM_ACCESS_KEY);
+    const clearSession = () => { storage.removeItem(SESSION_KEY); storage.removeItem(PLATFORM_ACCESS_KEY); };
 
     const notifyUnauthorized = () => {
       clearSession();
@@ -53,6 +57,8 @@
       const timer = setTimeout(() => controller.abort(), requestOptions.timeoutMs || timeoutMs);
       const session = readSession();
       const headers = { Accept: 'application/json', ...(requestOptions.headers || {}) };
+      const platformAccessToken = readPlatformAccess();
+      if (platformAccessToken) headers['X-Platform-Access-Token'] = platformAccessToken;
       let body;
 
       if (requestOptions.body !== undefined) {
@@ -113,6 +119,7 @@
       const result = await request('/auth/me');
       if (!result?.user) throw new ApiError('A API retornou uma sessão inválida', { code: 'INVALID_RESPONSE' });
       const current = readSession();
+      if (readPlatformAccess()) return writeSession({ platformAccessToken: readPlatformAccess(), user: result.user });
       return writeSession({ token: current?.token, user: result.user });
     };
 

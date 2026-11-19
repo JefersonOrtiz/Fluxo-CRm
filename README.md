@@ -1,116 +1,80 @@
-# Fluxo CRM — ambiente local
+# Fluxo CRM
 
-O CRM pode rodar como um site estático no GitHub Pages. Nesse modo, contatos, conversas e agenda são salvos no `localStorage` de cada navegador: não há servidor nem banco compartilhado na internet.
+CRM conversacional em evolução, com interface de chat, funil Kanban, agenda, gestão organizacional e uma base para integração com a WhatsApp Business Platform.
 
-## Publicar no GitHub Pages
+> **Estado atual:** no Docker, autenticação, organização, contatos, funil, conversas, mensagens manuais, agenda e configuração Meta usam a API PostgreSQL. Aurora, anexos, lembretes e envio pela Meta não estão integrados. Mensagem `pending` significa persistida, não entregue. Consulte [Estado do projeto](docs/project-status.md).
 
-1. Envie o projeto para a branch `main` do seu repositório GitHub.
-2. No repositório, abra **Settings → Pages**.
-3. Em **Build and deployment → Source**, escolha **GitHub Actions**.
-4. Faça um novo `git push`. O workflow `.github/workflows/pages.yml` fará a publicação.
+## Arquitetura oficial
 
-A URL final será `https://SEU-USUARIO.github.io/NOME-DO-REPOSITORIO/`.
+O caminho oficial do produto é:
 
-> Cada navegador mantém seus próprios dados. Para restaurar os contatos de demonstração, abra o console do navegador, execute `resetFluxoData()` e recarregue a página.
+```text
+Navegador → Nginx → API Node.js → PostgreSQL
+```
 
-## Servidor local opcional
+O GitHub Pages/localStorage é um modo de demonstração. O servidor SQLite permanece temporariamente para compatibilidade local e não deve receber novas funcionalidades. As decisões estão registradas em [ADR-0001](docs/adr/0001-runtime-canonico.md) e [ADR-0002](docs/adr/0002-persistencia.md).
 
-O projeto também possui um servidor Node.js e SQLite para uso local. Ele não é executado pelo GitHub Pages.
+## Início rápido
 
-## Ambiente local de produção — etapa 1
+### Demonstração estática
 
-Esta etapa adiciona uma API Node.js, PostgreSQL, autenticação, organizações, setores, colaboradores, privilégios, tags e uma base segura para a integração da Meta.
+Requer apenas um servidor HTTP. Na raiz do projeto:
 
-### Requisitos
+```bash
+python3 -m http.server 5500
+```
 
-- Docker Desktop com Docker Compose (recomendado para executar todos os serviços).
-- Node.js 24 ou superior, caso queira desenvolver somente a API.
+Abra `http://localhost:5500`. Também é possível usar a extensão Live Server do VS Code.
 
-### Iniciar tudo com Docker
+Os dados ficam somente no navegador. Para restaurar a demonstração, execute `resetFluxoData()` no console e recarregue a página.
 
-```powershell
+### Stack oficial de desenvolvimento
+
+Requisitos: Docker com Compose e portas `8080` e `3001` livres.
+
+```bash
+cp .env.example .env
+# Substitua os valores marcados antes de continuar.
 docker compose up --build
 ```
 
-- CRM: `http://localhost:8080`
+- Interface: `http://localhost:8080`
 - API: `http://localhost:3001/api/health`
-- PostgreSQL: acessível apenas entre os containers.
 
-Na primeira vez, crie a organização e a conta administradora pela API:
+Crie a organização e o administrador iniciais uma única vez:
 
-```powershell
-Invoke-RestMethod http://localhost:3001/api/auth/bootstrap -Method Post -ContentType 'application/json' -Body '{"organizationName":"Minha empresa","name":"Administrador","email":"admin@empresa.com","password":"uma-senha-com-8-caracteres"}'
+```bash
+curl --fail-with-body \
+  -X POST http://localhost:3001/api/auth/bootstrap \
+  -H 'Content-Type: application/json' \
+  -d '{"organizationName":"Minha empresa","name":"Administrador","email":"admin@empresa.com","password":"troque-esta-senha"}'
 ```
 
-### Executar só a API
+Depois do bootstrap, abra a interface e entre com a conta criada. Administração, contatos, funil, conversas e agenda usam a API; um aviso identifica o que ainda é demonstrativo ou preparatório.
 
-Copie `backend/.env.example` para `backend/.env`, preencha `DATABASE_URL` apontando para um PostgreSQL local e execute:
+## Documentação
 
-```powershell
-Set-Location backend
-npm.cmd install
-npm.cmd run dev
-```
+- [Governança](GOVERNANCE.md)
+- [Estado e limitações](docs/project-status.md)
+- [Arquitetura](docs/architecture.md)
+- [Modelo de dados](docs/data-model.md)
+- [Configuração](docs/configuration.md)
+- [Desenvolvimento](docs/development.md)
+- [Contrato da API](docs/api/openapi.yaml)
+- [Testes](docs/testing.md)
+- [Deploy](docs/deployment.md)
+- [Runbook operacional](docs/operations-runbook.md)
+- [Solução de problemas](docs/troubleshooting.md)
+- [Segurança](SECURITY.md)
+- [Como contribuir](CONTRIBUTING.md)
 
-### Endpoints incluídos
+## Regras essenciais
 
-- `POST /api/auth/bootstrap` — cria a primeira organização e administrador.
-- `POST /api/auth/login` e `GET /api/auth/me` — autenticação por token.
-- `GET/POST /api/departments` — setores.
-- `GET /api/members` — colaboradores.
-- `GET/POST /api/tags` — tags.
-- `GET/PUT /api/integrations/meta` — configura IDs e guarda tokens cifrados no backend.
-- `GET/POST /api/webhooks/meta` — endpoint preparado para validação e eventos da Meta.
+- Leia `GOVERNANCE.md` antes de alterar o projeto.
+- Não versione `.env`, tokens, senhas ou App Secret.
+- Atualize código, testes, OpenAPI e documentação na mesma mudança.
+- Não apresente recursos simulados como integrações reais.
 
-> Para produção, substitua todos os segredos de desenvolvimento por variáveis de ambiente fortes, use PostgreSQL gerenciado com backups e configure o webhook da Meta em um domínio HTTPS público. Não envie tokens, App Secret ou senhas ao repositório.
+## Licença
 
-## Pré-requisito
-
-Node.js 22.5 ou superior (a instalação atual usa Node 24).
-
-## Executar
-
-No PowerShell, dentro da pasta do projeto:
-
-```powershell
-npm.cmd run dev
-```
-
-Abra `http://localhost:3000`.
-
-Se a porta 3000 já estiver ocupada, use outra porta nesta sessão do PowerShell:
-
-```powershell
-$env:PORT=3001; npm.cmd start
-```
-
-Então abra `http://localhost:3001`.
-
-Para iniciar sem modo de observação:
-
-```powershell
-npm.cmd start
-```
-
-## Banco e API local
-
-O banco SQLite contém as tabelas `contacts`, `messages`, `events`, `tags` e `contact_tags`, com chaves estrangeiras e índices para conversas e agenda. Há contatos iniciais de demonstração.
-
-- `GET /api/health` verifica servidor e banco.
-- `GET` e `POST /api/contacts` lista e cria contatos.
-- `PATCH /api/contacts/:id` atualiza dados de um contato.
-- `GET /api/events` lista eventos.
-
-O arquivo do banco não é versionado e fica preservado entre reinicializações. Para começar do zero, pare o servidor e apague apenas `data/fluxo-crm.sqlite`.
-
-## Publicar no Railway
-
-1. Envie este projeto para um repositório no GitHub.
-2. No Railway, crie um projeto com **New Project → Deploy from GitHub repo** e selecione o repositório.
-3. No serviço criado, abra **Volumes** e crie um volume com o ponto de montagem `/data`.
-4. Em **Variables**, crie `DATA_DIR` com o valor `/data`.
-5. Em **Networking**, use **Generate Domain** para obter a URL pública.
-
-O arquivo `railway.json` já informa ao Railway como iniciar o app e valida a publicação usando `GET /api/health`. Todo push na branch conectada ao Railway dispara um novo deploy; o banco permanece no volume `/data`.
-
-> SQLite deve usar somente uma instância do serviço, pois o arquivo do banco não é apropriado para escrita concorrente por várias réplicas. Quando o CRM precisar escalar, migre para PostgreSQL gerenciado.
+Ainda não foi definida uma licença. Até que o responsável pelo projeto escolha e adicione uma, o repositório não concede permissão geral de redistribuição.

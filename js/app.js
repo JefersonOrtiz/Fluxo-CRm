@@ -389,6 +389,7 @@ renderKB();
 $('#kbBox').addEventListener('click',e=>{const b=e.target.closest('[data-kb]');if(b){kbs.splice(b.dataset.kb,1);renderKB();toast('🗑','Documento removido','Aurora não usará mais essa fonte.','coral')}});
 $('#kbAdd').onclick=()=>{const v=$('#kbInput').value.trim();if(!v)return;kbs.push(v);$('#kbInput').value='';renderKB();toast('📚','Base atualizada','A Aurora será retreinada com esse documento.','gold')};
 $('#pgBtn').onclick=()=>{const v=$('#pgInput').value.trim();if(!v)return;
+ if(apiConversationsMode())return;
  $('#pgBox').insertAdjacentHTML('beforeend',`<div class="msg me" style="margin-left:auto"><p>${esc(v)}</p></div>`);
  $('#pgInput').value='';$('#pgBox').scrollTop=1e5;
  setTimeout(()=>{$('#pgBox').insertAdjacentHTML('beforeend',`<div class="msg them" style="max-width:85%"><span class="ai-tag">✦ AURORA</span><p>${esc(kbReply(v))}</p></div>`);$('#pgBox').scrollTop=1e5},700)};

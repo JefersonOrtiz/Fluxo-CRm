@@ -14,6 +14,13 @@ export function loadConfig() {
   if (encryptionKey.length !== 32) errors.push('ENCRYPTION_KEY deve representar 32 bytes em Base64');
   if (errors.length) throw new Error(`Configuração inválida: ${errors.join('; ')}`);
 
+  const aiProvider = process.env.AI_PROVIDER || 'mock';
+  const openAiEnabled = process.env.OPENAI_ENABLED === 'true';
+  if (!['mock', 'openai'].includes(aiProvider)) errors.push('AI_PROVIDER deve ser mock ou openai');
+  if (openAiEnabled && aiProvider !== 'openai') errors.push('OPENAI_ENABLED=true exige AI_PROVIDER=openai');
+  if (openAiEnabled && !process.env.OPENAI_API_KEY) errors.push('OPENAI_API_KEY é obrigatória quando OPENAI_ENABLED=true');
+  if (errors.length) throw new Error(`Configuração inválida: ${errors.join('; ')}`);
+
   return Object.freeze({
     port: Number(process.env.PORT || 3001),
     databaseUrl: process.env.DATABASE_URL,
@@ -24,6 +31,7 @@ export function loadConfig() {
     bootstrapSecret: process.env.BOOTSTRAP_SECRET || '',
     openAiApiKey: process.env.OPENAI_API_KEY || '',
     openAiModel: process.env.OPENAI_MODEL || 'gpt-4o-mini',
-    aiProvider: process.env.AI_PROVIDER || 'openai'
+    aiProvider,
+    openAiEnabled
   });
 }

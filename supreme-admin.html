@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Painel Supremo · JF System CRM</title><link rel="stylesheet" href="css/supreme-admin.css">
+</head>
+<body>
+  <main class="supreme-shell">
+    <header class="topbar"><div class="brand"><span class="brand-mark">◈</span><div><strong>JF System CRM</strong><small id="adminLabel">Painel Supremo · acesso administrativo</small></div></div><div class="top-actions"><span class="status-pill"><i></i> Ambiente de demonstração</span><button class="button primary" id="newTenant">＋ Novo Tenant</button></div></header>
+    <nav class="nav-tabs" aria-label="Navegação administrativa">
+      <button class="nav-tab active" data-section="tenants">▣ Tenants <b id="tenantCountNav">0</b></button><button class="nav-tab" data-section="new">＋ Novo</button><button class="nav-tab" data-section="announcements">▱ Comunicados</button><button class="nav-tab" data-section="automations">◌ Automações</button><button class="nav-tab" data-section="dashboard">⌁ DashSupremo</button><button class="nav-tab" data-section="terms">▤ Termos de Uso</button><button class="nav-tab" data-section="privacy">▧ Privacidade</button><button class="nav-tab" data-section="connection">⇄ Conexão</button><button class="nav-tab" data-section="support">? Suporte</button>
+    </nav>
+    <section class="metric-strip" aria-label="Indicadores"><div class="metric"><span>▣</span><strong id="metricTotal">0</strong><small>Tenants</small></div><div class="metric"><span>⌁</span><strong id="metricActive">0</strong><small>Ativos</small></div><div class="metric"><span>♧</span><strong id="metricTrial">0</strong><small>Testes grátis</small></div><div class="metric"><span>⊘</span><strong id="metricCancelled">0</strong><small>Cancelados</small></div><div class="metric"><span>♙</span><strong id="metricUsers">0</strong><small>Usuários</small></div><div class="metric"><span>◌</span><strong id="metricChats">—</strong><small>Chats</small></div><div class="metric"><span>▤</span><strong id="metricArchived">0</strong><small>Arquivados</small></div></section>
+    <section class="period-bar"><div><button class="chip selected">Hoje</button><button class="chip">Dia específico</button></div><div class="period-note">No período <b>dados conforme a API</b><button class="button ghost" id="refresh">↻ Atualizar</button></div></section>
+    <section class="workspace"><aside class="tenant-column panel"><div class="subtabs"><button class="subtab active" data-filter="operational">Operacionais <b id="operationalCount">0</b></button><button class="subtab" data-filter="archived">Arquivados <b id="archivedCount">0</b></button></div><div class="filters"><label class="search"><span>⌕</span><input id="search" placeholder="Buscar tenant…"></label><select id="stateFilter"><option value="all">Estado · Todos</option><option value="active">Ativos</option><option value="suspended">Suspensos</option><option value="archived">Arquivados</option></select><select id="planFilter"><option value="all">Plano · Todos</option></select></div><div id="tenantList" class="tenant-list"></div></aside><article id="details" class="detail-column panel"><div class="empty-state"><span>▣</span><h2>Selecione um Tenant</h2><p>Escolha uma empresa na lista para consultar os detalhes administrativos.</p></div></article></section>
+  </main>
+  <script src="js/api.js"></script><script src="js/supreme-admin.js"></script>
+</body>
+</html>

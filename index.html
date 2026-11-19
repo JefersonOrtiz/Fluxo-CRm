@@ -208,12 +208,16 @@
         <div><p class="crumb">Inteligência artificial</p><h1>Aurora ✦ sua atendente virtual</h1></div>
         <div class="head-actions"><div class="chip-clock"><span class="livedot"></span> Aurora · online e treinada</div></div>
       </header>
-      <div class="ai-wrap">
+      <div class="ai-wrap ai-layout-grid">
         <div class="ai-col">
           <div class="card">
-            <h3>🧬 Persona & tom de voz</h3>
+            <h3>🧬 Prompt Mestre & Tom de voz</h3>
             <textarea class="persona-txt" id="personaTxt">Você é a Aurora, assistente virtual da Fluxo. Atende pelo WhatsApp com simpatia, objetividade e emojis leves. Seu objetivo é qualificar leads, tirar dúvidas sobre planos e agendar reuniões para o time comercial. Nunca invente preços fora da tabela.</textarea>
             <div class="toneseg"><button class="tone" data-tone>Formal</button><button class="tone on" data-tone>Amigável</button><button class="tone" data-tone>Descontraído</button></div>
+            <div style="display:flex; align-items:center; justify-content:flex-end; gap:12px; margin-top:16px; flex-wrap:wrap;">
+              <p class="form-help" id="auroraSettingsStatus" role="status" aria-live="polite" style="margin:0;"></p>
+              <button class="btn gold" id="auroraSaveBtn" type="button">Salvar configurações</button>
+            </div>
           </div>
           <div class="card">
             <h3>⚙️ Automações</h3>
@@ -222,11 +226,6 @@
             <div class="trow"><div><b>Transbordo humano</b><small>Chama você quando o cliente pede</small></div><span class="sw on" data-sw="Transbordo humano"></span></div>
             <div class="trow"><div><b>Análise de sentimento</b><small>Detecta clientes insatisfeitos</small></div><span class="sw on" data-sw="Análise de sentimento"></span></div>
             <div class="trow"><div><b>Follow-up inteligente</b><small>Cobra resposta de leads frios</small></div><span class="sw" data-sw="Follow-up inteligente"></span></div>
-          </div>
-          <div class="card">
-            <h3>📚 Base de conhecimento</h3>
-            <div id="kbBox"></div>
-            <div class="kb-add"><input class="inp" id="kbInput" placeholder="Adicionar documento ou URL…"><button class="btn" id="kbAdd" style="padding:9px 16px">Add</button></div>
           </div>
         </div>
         <div class="ai-col">
@@ -250,6 +249,11 @@
             <div class="trow"><div><b>Cobrança suave</b><small>Lembrete de boleto 1 dia antes</small></div><span class="sw" data-sw="Cobrança suave"></span></div>
           </div>
         </div>
+        <div class="card aurora-knowledge-card">
+            <h3>📚 Base de conhecimento</h3>
+            <div id="kbBox"></div>
+            <div class="kb-add"><input class="inp" id="kbInput" placeholder="Adicionar documento ou URL…"><button class="btn" id="kbAdd" style="padding:9px 16px">Add</button></div>
+          </div>
       </div>
     </section>
 
@@ -356,6 +360,7 @@
 
 <div id="toastWrap"></div>
 
+<script src="js/platform-access.js"></script>
 <script src="js/api.js"></script>
 <script src="js/data.js"></script>
 <script src="js/storage.js"></script>
@@ -367,6 +372,7 @@
 <script src="js/conversations.js?v=chat-ui-3"></script>
 <script src="js/calendar.js"></script>
 <script src="js/app.js?v=actions-2"></script>
+<script src="js/aurora.js"></script>
 <script src="js/auth.js"></script>
 </body>
 </html>

@@ -10,7 +10,7 @@ const config = loadConfig();
 const pool = new Pool({ connectionString: config.databaseUrl });
 const security = createSecurity(config);
 await runMigrations(pool);
-const aiProvider = createAiProvider({ apiKey: config.openAiApiKey, model: config.openAiModel, provider: config.aiProvider });
+const aiProvider = createAiProvider({ apiKey: config.openAiApiKey, model: config.openAiModel, provider: config.aiProvider, enabled: config.openAiEnabled });
 const server = createServer(createRequestHandler({ pool, security, config, aiProvider }));
 
 const shutdown = signal => {
