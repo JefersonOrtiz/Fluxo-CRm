@@ -4,3 +4,21 @@ node_modules/
 backend/node_modules/
 .env
 backend/.env
+
+.env.casa
+.env.aurora-demo
+# Arquivos privados de ambiente
+.env.*
+!.env.example
+!.env.*.example
+
+# Backups e arquivos temporários
+*.backup
+*.aurora-layout-backup
+*.bak
+*.dump
+*.dump.gpg
+
+# Chaves e certificados privados
+*.pem
+*.key

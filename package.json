@@ -5,9 +5,14 @@
   "type": "module",
   "scripts": {
     "dev": "node --watch server.mjs",
-    "start": "node server.mjs"
+    "start": "node server-postgresql.mjs",
+    "test": "node --test tests/*.test.mjs",
+    "check": "node --check server.mjs && node --check js/runtime-config.js && node --check js/api.js && node --check js/auth.js && node --check js/data.js && node --check js/storage.js && node --check js/ai.js && node --check js/management.js && node --check js/contacts.js && node --check js/conversations.js && node --check js/calendar.js && node --check js/app.js && npm test && npm --prefix backend run check"
   },
   "engines": {
     "node": ">=22.5.0"
+  },
+  "dependencies": {
+    "pg": "^8.23.1"
   }
 }

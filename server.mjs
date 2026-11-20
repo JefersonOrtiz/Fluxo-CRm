@@ -113,7 +113,7 @@ const server = createServer(async (req, res) => {
     }
     if (url.pathname === '/api/events' && req.method === 'GET') return json(res, 200, db.prepare('SELECT * FROM events ORDER BY starts_at').all());
 
-    let requested = url.pathname === '/' ? 'index.html.html' : decodeURIComponent(url.pathname).replace(/^\//, '');
+    let requested = url.pathname === '/' ? 'index.html' : decodeURIComponent(url.pathname).replace(/^\//, '');
     requested = normalize(requested).replace(/^([.][.][\\/])+/, '');
     let filePath = join(root, requested);
     const legacyFiles = {

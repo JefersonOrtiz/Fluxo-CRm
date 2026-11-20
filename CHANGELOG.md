@@ -39,6 +39,10 @@ O projeto segue o formato do Keep a Changelog enquanto não possui versões publ
 
 ### Alterado
 
+- Painel Supremo reorganizado em layout administrativo denso, com navegação, indicadores, filtros, lista de Tenants e detalhamento responsivo.
+- Acesso do Super Admin ao Dashboard do Tenant passou a usar sessão temporária em `sessionStorage`, sem token em URL, e a mensalidade do Painel passou a aceitar e exibir o formato monetário brasileiro.
+- Painel Supremo alinhado aos tokens visuais do CRM, com estados de interação e transferência same-origin do acesso temporário para nova aba.
+- Abas administrativas de usuários, funcionalidades, financeiro manual, auditoria e conexões passaram a consultar endpoints protegidos e isolados por Tenant.
 - README consolidado para distinguir demonstração, servidor SQLite legado e stack PostgreSQL oficial.
 - Backend separado em configuração, segurança, utilitários HTTP e aplicação.
 - Respostas organizacionais padronizadas em camelCase e erros com código estável.
@@ -54,6 +58,8 @@ O projeto segue o formato do Keep a Changelog enquanto não possui versões publ
 
 - Compose passa a exigir segredos locais explícitos para JWT e criptografia.
 - Artefato do GitHub Pages passa a conter apenas os arquivos necessários à demonstração.
+- Sessões temporárias do Painel Supremo passaram a ser explicitamente `readonly`,
+  com bloqueio central de escritas e de rotas globais no backend.
 
 ## Histórico anterior
 

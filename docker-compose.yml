@@ -18,7 +18,9 @@ services:
     environment:
       PORT: 3001
       DATABASE_URL: postgresql://fluxo:fluxo_local@postgres:5432/fluxo_crm
-      JWT_SECRET: desenvolvimento-troque-em-producao
+      JWT_SECRET: ${JWT_SECRET:?Defina JWT_SECRET no arquivo .env}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:?Defina ENCRYPTION_KEY no arquivo .env}
+      META_VERIFY_TOKEN: ${META_VERIFY_TOKEN:-}
       CORS_ORIGIN: http://localhost:8080
     depends_on:
       postgres:

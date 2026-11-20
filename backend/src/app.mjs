@@ -1,11 +1,15 @@
-import { timingSafeEqual } from 'node:crypto';
+import { createHash, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
 import { databaseError, email, HttpError, json, optionalString, parseBody, requiredString, routeId } from './http.mjs';
+import { aiLimits, buildKnowledgeContext, buildSuggestionContext, createRateLimiter, limitSuggestion, selectRelevantKnowledge } from './openai.mjs';
+import { calculateUsageCost, finalizeQuotaUsage, quotaPeriodUtc, reserveQuota } from './ai-usage.mjs';
 
 export const ROLE_PERMISSIONS = Object.freeze([
   'organization:write',
   'contacts:write',
   'conversations:write',
   'messages:write',
+  'ai:suggestions',
+  'ai:configuration',
   'events:write',
   'members:write',
   'roles:write',
@@ -13,6 +17,10 @@ export const ROLE_PERMISSIONS = Object.freeze([
 ]);
 
 const CONTACT_STAGES = Object.freeze(['Novo lead', 'Qualificação', 'Proposta', 'Negociação', 'Fechamento']);
+const AI_COMMERCIAL_TAGS = new Set(['interesse-produto', 'origem-campanha', 'prioridade', 'segmento-comercial', 'intenção-demo']);
+const AURORA_TONES = new Set(['formal', 'amigavel', 'descontraido']);
+const AURORA_KNOWLEDGE_TYPES = new Set(['text', 'faq']);
+const AURORA_DEFAULT_PROMPT = 'Você é a Aurora, assistente virtual comercial. Seja útil, clara e cordial, sem inventar informações comerciais.';
 const CONTACT_SORTS = Object.freeze({
   updatedAt: 'c.updated_at',
   name: 'c.name',
@@ -21,7 +29,7 @@ const CONTACT_SORTS = Object.freeze({
 });
 const CONTACT_SELECT = `SELECT c.id,c.name,c.phone,c.email,c.company,c.stage,c.value_cents "valueCents",c.created_at "createdAt",c.updated_at "updatedAt",c.xmin::text version,COALESCE(json_agg(json_build_object('id',t.id,'name',t.name,'color',t.color) ORDER BY t.name) FILTER (WHERE t.id IS NOT NULL),'[]'::json) tags FROM contacts c LEFT JOIN contact_tags ct ON ct.contact_id=c.id LEFT JOIN tags t ON t.id=ct.tag_id`;
 const CONVERSATION_STATUSES = Object.freeze(['open', 'closed']);
-const CONVERSATION_SELECT = `SELECT cv.id,cv.channel,cv.status,cv.contact_id "contactId",cv.assigned_user_id "assignedUserId",cv.created_at "createdAt",cv.updated_at "updatedAt",cv.xmin::text version,c.name "contactName",c.company "contactCompany",c.phone "contactPhone",u.name "assignedUserName",lm.id "latestMessageId",lm.body "latestMessageBody",lm.direction "latestMessageDirection",lm.sender_type "latestMessageSenderType",lm.status "latestMessageStatus",lm.sent_at "latestMessageSentAt" FROM conversations cv JOIN contacts c ON c.id=cv.contact_id LEFT JOIN users u ON u.id=cv.assigned_user_id LEFT JOIN LATERAL (SELECT m.id,m.body,m.direction,m.sender_type,m.status,m.sent_at FROM messages m WHERE m.conversation_id=cv.id ORDER BY m.sent_at DESC,m.id DESC LIMIT 1) lm ON true`;
+const CONVERSATION_SELECT = `SELECT cv.id,cv.channel,cv.status,cv.contact_id "contactId",cv.assigned_user_id "assignedUserId",cv.created_at "createdAt",cv.updated_at "updatedAt",cv.xmin::text version,c.name "contactName",c.company "contactCompany",c.phone "contactPhone",c.stage "contactStage",u.name "assignedUserName",lm.id "latestMessageId",lm.body "latestMessageBody",lm.direction "latestMessageDirection",lm.sender_type "latestMessageSenderType",lm.status "latestMessageStatus",lm.sent_at "latestMessageSentAt" FROM conversations cv JOIN contacts c ON c.id=cv.contact_id LEFT JOIN users u ON u.id=cv.assigned_user_id LEFT JOIN LATERAL (SELECT m.id,m.body,m.direction,m.sender_type,m.status,m.sent_at FROM messages m WHERE m.conversation_id=cv.id ORDER BY m.sent_at DESC,m.id DESC LIMIT 1) lm ON true`;
 const MESSAGE_SELECT = `SELECT id,conversation_id "conversationId",direction,sender_type "senderType",body,client_message_id "clientMessageId",provider_message_id "providerMessageId",status,sent_at "sentAt" FROM messages`;
 const EVENT_TYPES = Object.freeze(['reuniao', 'followup', 'entrega', 'lead']);
 const EVENT_SELECT = `SELECT e.id,e.title,e.type,e.start_at "startAt",e.end_at "endAt",e.timezone,e.contact_id "contactId",e.assigned_user_id "assignedUserId",e.created_at "createdAt",e.updated_at "updatedAt",e.xmin::text version,c.name "contactName",c.company "contactCompany",u.name "assignedUserName" FROM events e LEFT JOIN contacts c ON c.id=e.contact_id LEFT JOIN users u ON u.id=e.assigned_user_id`;
@@ -43,6 +51,26 @@ const conversationOutput = row => ({ ...row, nextCursor: undefined });
 const getConversation = async (queryable, conversationId, organizationId) => {
   const { rows } = await queryable.query(`${CONVERSATION_SELECT} WHERE cv.id=$1 AND cv.organization_id=$2`, [conversationId, organizationId]);
   return rows[0] ? conversationOutput(rows[0]) : null;
+};
+
+const normalizeAiTagName = value => String(value || '').trim().toLocaleLowerCase('pt-BR').normalize('NFC');
+const getAuthorizedConversationTags = async (queryable, conversationId, organizationId) => {
+  const { rows } = await queryable.query(`SELECT DISTINCT t.name
+    FROM conversations cv
+    JOIN contacts c ON c.id=cv.contact_id AND c.organization_id=$2
+    JOIN contact_tags ct ON ct.contact_id=c.id
+    JOIN tags t ON t.id=ct.tag_id AND t.organization_id=$2
+    WHERE cv.id=$1 AND cv.organization_id=$2
+    ORDER BY t.name
+    LIMIT 50`, [conversationId, organizationId]);
+  const tags = [];
+  const seen = new Set();
+  for (const row of rows) {
+    const name = normalizeAiTagName(row.name);
+    if (name.length > 60 || !AI_COMMERCIAL_TAGS.has(name) || seen.has(name)) continue;
+    seen.add(name); tags.push(name);
+  }
+  return tags;
 };
 
 const getEvent = async (queryable, eventId, organizationId) => {
@@ -129,7 +157,33 @@ const userPayload = row => ({
   sessionVersion: row.session_version
 });
 
+const platformUserPayload = row => ({ ...userPayload(row), isPlatformAdmin: row.is_platform_admin === true });
+
+const hashPlatformToken = token => createHash('sha256').update(token).digest();
+
 const auth = async (request, security, pool) => {
+  const platformToken = request.headers['x-platform-access-token'];
+  if (typeof platformToken === 'string' && platformToken.length >= 32) {
+    const { rows } = await pool.query(`SELECT u.id,u.organization_id,u.name,u.email,u.session_version,u.is_platform_admin,
+      r.name role_name,r.permissions,s.organization_id access_organization_id,s.access_mode
+      FROM platform_access_sessions s JOIN users u ON u.id=s.admin_user_id
+      JOIN roles r ON r.id=u.role_id AND r.organization_id=u.organization_id
+      WHERE s.token_hash=$1 AND s.revoked_at IS NULL AND s.expires_at>now() AND u.active=true AND u.is_platform_admin=true`, [hashPlatformToken(platformToken)]);
+    if (!rows[0]) throw new HttpError(401, 'Acesso administrativo temporário inválido ou expirado', 'UNAUTHORIZED');
+    if (rows[0].access_mode !== 'readonly') throw new HttpError(401, 'Modo de acesso administrativo inválido', 'UNAUTHORIZED');
+    return {
+      userId: rows[0].id,
+      organizationId: rows[0].access_organization_id,
+      name: rows[0].name,
+      email: rows[0].email,
+      role: 'Visualização administrativa',
+      permissions: [],
+      sessionVersion: rows[0].session_version,
+      isPlatformAdmin: false,
+      platformAccess: true,
+      platformAccessMode: rows[0].access_mode
+    };
+  }
   const token = security.readToken(request);
 
   if (!token?.userId || !token?.organizationId) {
@@ -137,7 +191,7 @@ const auth = async (request, security, pool) => {
   }
 
   const { rows } = await pool.query(
-    `SELECT u.id, u.organization_id, u.name, u.session_version,
+    `SELECT u.id, u.organization_id, u.name, u.session_version, u.is_platform_admin,
             r.name AS role_name, r.permissions
        FROM users u
        JOIN roles r
@@ -157,7 +211,50 @@ const auth = async (request, security, pool) => {
     throw new HttpError(401, 'Sessão revogada. Entre novamente.', 'UNAUTHORIZED');
   }
 
-  return userPayload(rows[0]);
+  return platformUserPayload(rows[0]);
+};
+
+const requirePlatformAdmin = session => {
+  if (!session.isPlatformAdmin || session.platformAccess) throw new HttpError(403, 'Acesso reservado ao Super Admin', 'PLATFORM_ADMIN_REQUIRED');
+};
+
+// A sessão emitida para visualizar um Tenant nunca pode virar uma sessão de escrita.
+// O guard fica no backend e não depende do método HTTP usado pelo frontend.
+const rejectTemporaryWrites = session => {
+  if (session.platformAccess) throw new HttpError(403, 'Acesso temporário é somente leitura', 'PLATFORM_READONLY');
+};
+
+const readPlatformTenantSettings = body => {
+  requireKnownFields(body, ['plan','monthlyFee','billingDueDay','trialEndsAt','userLimit','aiRequestsLimit','aiInputTokensLimit','aiOutputTokensLimit','status']);
+  const result = {};
+  if (body.plan !== undefined) result.plan = requiredString(body, 'plan', { max: 80, label: 'Plano' });
+  if (body.monthlyFee !== undefined) {
+    const fee = String(body.monthlyFee).trim();
+    if (!/^(?:0|[1-9]\d*)(?:\.\d{1,12})?$/.test(fee)) throw new HttpError(400, 'Mensalidade inválida', 'VALIDATION_ERROR');
+    result.monthlyFee = fee;
+  }
+  if (body.billingDueDay !== undefined && body.billingDueDay !== null) {
+    const day = Number(body.billingDueDay);
+    if (!Number.isInteger(day) || day < 1 || day > 31) throw new HttpError(400, 'Vencimento inválido', 'VALIDATION_ERROR');
+    result.billingDueDay = day;
+  }
+  if (body.trialEndsAt !== undefined && body.trialEndsAt !== null) {
+    const value = requiredString(body, 'trialEndsAt', { max: 40, label: 'Fim do trial' });
+    if (!/(Z|[+-]\d{2}:\d{2})$/.test(value) || Number.isNaN(Date.parse(value))) throw new HttpError(400, 'Data de trial inválida', 'VALIDATION_ERROR');
+    result.trialEndsAt = new Date(value).toISOString();
+  }
+  for (const field of ['userLimit','aiRequestsLimit','aiInputTokensLimit','aiOutputTokensLimit']) {
+    if (body[field] === undefined || body[field] === null) continue;
+    const value = String(body[field]);
+    if (!/^(?:0|[1-9]\d*)$/.test(value)) throw new HttpError(400, `${field} inválido`, 'VALIDATION_ERROR');
+    result[field] = value;
+  }
+  if (body.status !== undefined) {
+    const status = requiredString(body, 'status', { max: 20, label: 'Status' });
+    if (!['active', 'suspended', 'archived'].includes(status)) throw new HttpError(400, 'Status inválido', 'VALIDATION_ERROR');
+    result.status = status;
+  }
+  return result;
 };
 
 const requirePermission = (session, permission) => {
@@ -165,6 +262,42 @@ const requirePermission = (session, permission) => {
   if (!permissions.includes('*') && !permissions.includes(permission)) {
     throw new HttpError(403, 'Sem permissão para esta ação', 'FORBIDDEN');
   }
+};
+
+const requireKnownFields = (body, fields) => {
+  const unknown = Object.keys(body).filter(field => !fields.includes(field));
+  if (unknown.length) throw new HttpError(400, `Campo não permitido: ${unknown[0]}`, 'FIELD_NOT_ALLOWED');
+};
+
+const readAuroraSettings = body => {
+  requireKnownFields(body, ['masterPrompt', 'tone']);
+  const masterPrompt = requiredString(body, 'masterPrompt', { min: 1, max: 12_000, label: 'Prompt Mestre' });
+  const tone = requiredString(body, 'tone', { max: 20, label: 'Tom de voz' });
+  if (!AURORA_TONES.has(tone)) throw new HttpError(400, 'Tom de voz inválido', 'VALIDATION_ERROR');
+  return { masterPrompt, tone };
+};
+
+const readAuroraKnowledge = (body, { partial = false } = {}) => {
+  requireKnownFields(body, ['title', 'type', 'content', 'active']);
+  const result = {};
+  if (!partial || body.title !== undefined) result.title = requiredString(body, 'title', { max: 160, label: 'Título' });
+  if (!partial || body.type !== undefined) {
+    result.type = requiredString(body, 'type', { max: 10, label: 'Tipo' });
+    if (!AURORA_KNOWLEDGE_TYPES.has(result.type)) throw new HttpError(400, 'Tipo de conteúdo inválido', 'VALIDATION_ERROR');
+  }
+  if (!partial || body.content !== undefined) result.content = requiredString(body, 'content', { max: 50_000, label: 'Conteúdo' });
+  if (body.active !== undefined) {
+    if (typeof body.active !== 'boolean') throw new HttpError(400, 'Status ativo inválido', 'VALIDATION_ERROR');
+    result.active = body.active;
+  }
+  if (!Object.keys(result).length) throw new HttpError(400, 'Nenhuma alteração enviada', 'VALIDATION_ERROR');
+  return result;
+};
+
+const getRelevantAuroraKnowledge = async (queryable, organizationId, query) => {
+  const { rows } = await queryable.query(`SELECT id,title,type,content,active
+    FROM aurora_knowledge_base WHERE organization_id=$1 AND active=true ORDER BY updated_at DESC,id LIMIT 100`, [organizationId]);
+  return buildKnowledgeContext(selectRelevantKnowledge(rows, query), 8_000);
 };
 
 const readPermissions = body => {
@@ -221,13 +354,76 @@ const assertOwnedReference = async (pool, table, id, organizationId, label) => {
 
 const notFound = label => new HttpError(404, `${label} não encontrado`, 'NOT_FOUND');
 
-export function createRequestHandler({ pool, security, config }) {
+const REQUEST_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const getAiRequestId = request => {
+  const value = request.headers['idempotency-key'];
+  return typeof value === 'string' && REQUEST_ID_PATTERN.test(value) ? value : randomUUID();
+};
+
+const getAiReservation = async (pool, organizationId, model, inputTokens, outputTokens) => {
+  const period = quotaPeriodUtc();
+  const quota = await pool.query(`SELECT currency FROM ai_quotas
+    WHERE organization_id=$1 AND period_start=$2`, [organizationId, period.periodStart]);
+  if (!quota.rows[0]) return { reason: 'QUOTA_MISSING' };
+  const currency = quota.rows[0].currency;
+  const rates = await pool.query(`SELECT id,input_price_per_million,output_price_per_million
+    FROM ai_model_rates
+    WHERE provider='openai' AND model=$1 AND currency=$2 AND active=true
+      AND effective_from <= now() AND (effective_until IS NULL OR effective_until > now())
+    ORDER BY effective_from DESC LIMIT 1`, [model, currency]);
+  const rate = rates.rows[0];
+  if (!rate) return { reason: 'RATE_INVALID' };
+  const cost = calculateUsageCost({ inputTokens, outputTokens, inputPricePerMillion: rate.input_price_per_million, outputPricePerMillion: rate.output_price_per_million });
+  if (cost === null) return { reason: 'RATE_INVALID' };
+  return { period, rateId: rate.id, currency, cost };
+};
+
+const estimateAiReservation = ({ context, knowledgeContext, masterPrompt }) => {
+  const chars = String(context || '').length + String(knowledgeContext || '').length + String(masterPrompt || '').length + 2_000;
+  const inputTokens = Math.min(12_000, Math.max(1, Math.ceil(chars / 4)));
+  return { inputTokens, outputTokens: aiLimits.MAX_OUTPUT_TOKENS };
+};
+
+const suggestWithUsage = async ({ request, pool, session, aiProvider, config, context, knowledgeContext, masterPrompt, tone, maxSuggestions }) => {
+  if (config.aiProvider !== 'openai') return aiProvider.suggest({ context, knowledgeContext, masterPrompt, tone, maxSuggestions });
+  const estimate = estimateAiReservation({ context, knowledgeContext, masterPrompt });
+  const tariff = await getAiReservation(pool, session.organizationId, config.openAiModel, estimate.inputTokens, estimate.outputTokens);
+  if (tariff.reason) throw new HttpError(429, 'Aurora sem quota ou tarifa válida para esta organização', `AI_${tariff.reason}`);
+  const requestId = getAiRequestId(request);
+  const reservation = await reserveQuota({
+    pool,
+    authContext: { organizationId: session.organizationId, userId: session.userId },
+    requestId,
+    provider: 'openai',
+    model: config.openAiModel,
+    rateId: tariff.rateId,
+    currency: tariff.currency,
+    reservation: { requests: 1, inputTokens: estimate.inputTokens, outputTokens: estimate.outputTokens, cost: tariff.cost },
+    reservationExpiresAt: new Date(Date.now() + 15 * 60 * 1000).toISOString()
+  });
+  if (!reservation.reserved) throw new HttpError(429, 'Quota da Aurora insuficiente', 'AI_QUOTA_EXCEEDED');
+  try {
+    const result = await aiProvider.suggest({ context, knowledgeContext, masterPrompt, tone, maxSuggestions });
+    await finalizeQuotaUsage({ pool, authContext: { organizationId: session.organizationId, userId: session.userId }, requestId, result });
+    return result;
+  } catch (error) {
+    const failure = error?.code === 'AI_CLIENT_UNAVAILABLE' || error?.code === 'AI_NOT_CONFIGURED'
+      ? 'failed_before_provider'
+      : 'provider_unknown';
+    await finalizeQuotaUsage({ pool, authContext: { organizationId: session.organizationId, userId: session.userId }, requestId, result: { providerRequestId: error?.providerRequestId }, failure }).catch(() => {});
+    throw error;
+  }
+};
+
+export function createRequestHandler({ pool, security, config, aiProvider }) {
+  const allowAiOrganization = createRateLimiter({ windowMs: 60_000, max: 30 });
+  const allowAiUser = createRateLimiter({ windowMs: 60_000, max: 10 });
   return async (request, response) => {
     const origin = typeof request.headers.origin === 'string' ? request.headers.origin : '';
     const corsAllowed = Boolean(origin) && Array.isArray(config.corsOrigins) && config.corsOrigins.includes(origin);
     if (corsAllowed) {
       response.setHeader('Access-Control-Allow-Origin', origin);
-      response.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+      response.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, Idempotency-Key, X-Platform-Access-Token');
       response.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
       response.setHeader('Vary', 'Origin');
     }
@@ -238,6 +434,196 @@ export function createRequestHandler({ pool, security, config }) {
       if (url.pathname === '/api/health' && request.method === 'GET') {
         await pool.query('SELECT 1');
         return json(response, 200, { ok: true, service: 'fluxo-api' });
+      }
+
+      if (request.headers['x-platform-access-token']) {
+        const temporarySession = await auth(request, security, pool);
+        if (temporarySession.platformAccess && (url.pathname.startsWith('/api/platform') || !['GET', 'HEAD'].includes(request.method))) {
+          rejectTemporaryWrites(temporarySession);
+        }
+      }
+
+      const platformRead = async () => {
+        const session = await auth(request, security, pool);
+        requirePlatformAdmin(session);
+        const organizationId = url.searchParams.get('organizationId');
+        if (!/^[0-9a-f-]{36}$/i.test(organizationId || '')) throw new HttpError(400, 'Tenant inválido', 'VALIDATION_ERROR');
+        const exists = await pool.query('SELECT 1 FROM organizations WHERE id=$1', [organizationId]);
+        if (!exists.rowCount) throw notFound('Tenant');
+        return { session, organizationId };
+      };
+
+      if (url.pathname === '/api/platform/tenant-users' && request.method === 'GET') {
+        const { organizationId } = await platformRead();
+        const { rows } = await pool.query(`SELECT u.id,u.name,u.email,u.active,u.last_seen_at "lastSeenAt",r.name role
+          FROM users u LEFT JOIN roles r ON r.id=u.role_id AND r.organization_id=$1
+          WHERE u.organization_id=$1 ORDER BY u.name,u.id`, [organizationId]);
+        return json(response, 200, { users: rows });
+      }
+
+      if (url.pathname === '/api/platform/features' && request.method === 'GET') {
+        const { organizationId } = await platformRead();
+        const { rows } = await pool.query(`SELECT feature_key "key",enabled,visible,updated_at "updatedAt"
+          FROM platform_tenant_features WHERE organization_id=$1 ORDER BY feature_key`, [organizationId]);
+        return json(response, 200, { features: rows });
+      }
+
+      if (url.pathname === '/api/platform/features' && request.method === 'PUT') {
+        const { organizationId, session } = await platformRead();
+        const body = await parseBody(request);
+        if (!Array.isArray(body.features) || body.features.length > 40) throw new HttpError(400, 'Lista de funcionalidades inválida', 'VALIDATION_ERROR');
+        const client = await pool.connect();
+        try {
+          await client.query('BEGIN');
+          for (const feature of body.features) {
+            const key = requiredString(feature || {}, 'key', { min: 1, max: 80, label: 'Funcionalidade' });
+            if (!/^[a-z0-9._-]+$/.test(key)) throw new HttpError(400, 'Identificador de funcionalidade inválido', 'VALIDATION_ERROR');
+            if (typeof feature.enabled !== 'boolean' || typeof feature.visible !== 'boolean') throw new HttpError(400, 'Estado da funcionalidade inválido', 'VALIDATION_ERROR');
+            await client.query(`INSERT INTO platform_tenant_features(organization_id,feature_key,enabled,visible,updated_by)
+              VALUES($1,$2,$3,$4,$5) ON CONFLICT (organization_id,feature_key) DO UPDATE SET enabled=EXCLUDED.enabled,visible=EXCLUDED.visible,updated_by=EXCLUDED.updated_by,updated_at=now()`, [organizationId, key, feature.enabled, feature.visible, session.userId]);
+          }
+          await client.query(`INSERT INTO platform_audit_log(admin_user_id,organization_id,action,target_id,metadata) VALUES($1,$2,'tenant_features_update',$2,$3)`, [session.userId, organizationId, JSON.stringify(body.features.map(feature => feature.key))]);
+          await client.query('COMMIT');
+          return json(response, 200, { saved: body.features.length });
+        } catch (error) { await client.query('ROLLBACK').catch(() => {}); throw error; } finally { client.release(); }
+      }
+
+      if (url.pathname === '/api/platform/audit' && request.method === 'GET') {
+        const { organizationId } = await platformRead();
+        const limit = Math.min(Math.max(Number(url.searchParams.get('limit') || 50), 1), 100);
+        const { rows } = await pool.query(`SELECT a.id,a.action,a.metadata,a.created_at "createdAt",u.name "adminName",o.name "tenantName"
+          FROM platform_audit_log a JOIN users u ON u.id=a.admin_user_id LEFT JOIN organizations o ON o.id=a.organization_id
+          WHERE a.organization_id=$1 ORDER BY a.created_at DESC,a.id DESC LIMIT $2`, [organizationId, limit]);
+        return json(response, 200, { entries: rows });
+      }
+
+      if (url.pathname === '/api/platform/connections' && request.method === 'GET') {
+        const { organizationId } = await platformRead();
+        const { rows } = await pool.query(`SELECT provider,app_id "appId",business_id "businessId",waba_id "wabaId",phone_number_id "phoneNumberId",status,updated_at "updatedAt"
+          FROM integrations WHERE organization_id=$1 ORDER BY provider`, [organizationId]);
+        return json(response, 200, { connections: rows });
+      }
+
+      if (url.pathname === '/api/platform/billing' && request.method === 'GET') {
+        const { organizationId } = await platformRead();
+        const { rows } = await pool.query(`SELECT id,competence,amount,status,paid_at "paidAt",paid_amount "paidAmount",notes,created_at "createdAt"
+          FROM platform_billing_invoices WHERE organization_id=$1 ORDER BY competence DESC,id DESC`, [organizationId]);
+        return json(response, 200, { invoices: rows });
+      }
+
+      if (url.pathname === '/api/platform/billing' && request.method === 'POST') {
+        const { organizationId, session } = await platformRead();
+        const body = await parseBody(request);
+        const competence = requiredString(body, 'competence', { min: 10, max: 10, label: 'Competência' });
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(competence)) throw new HttpError(400, 'Competência inválida', 'VALIDATION_ERROR');
+        const amount = String(body.amount ?? '').replace(',', '.');
+        if (!/^\d+(\.\d{1,2})?$/.test(amount) || Number(amount) < 0) throw new HttpError(400, 'Valor inválido', 'VALIDATION_ERROR');
+        const notes = optionalString(body, 'notes', { max: 1000 }) || '';
+        const { rows } = await pool.query(`INSERT INTO platform_billing_invoices(organization_id,competence,amount,notes,created_by)
+          VALUES($1,$2,$3,$4,$5) RETURNING id,competence,amount,status,notes,created_at "createdAt"`, [organizationId, competence, amount, notes, session.userId]);
+        await pool.query(`INSERT INTO platform_audit_log(admin_user_id,organization_id,action,target_id,metadata) VALUES($1,$2,'billing_invoice_created',$3,$4)`, [session.userId, organizationId, rows[0].id, JSON.stringify({ competence, amount })]);
+        return json(response, 201, rows[0]);
+      }
+
+      const billingPaymentMatch = url.pathname.match(/^\/api\/platform\/billing\/([0-9a-f-]{36})\/pay$/i);
+      if (billingPaymentMatch && request.method === 'POST') {
+        const { organizationId, session } = await platformRead();
+        const body = await parseBody(request);
+        const paidAmount = String(body.paidAmount ?? '').replace(',', '.');
+        if (!/^\d+(\.\d{1,2})?$/.test(paidAmount) || Number(paidAmount) < 0) throw new HttpError(400, 'Valor pago inválido', 'VALIDATION_ERROR');
+        const result = await pool.query(`UPDATE platform_billing_invoices SET status='paid',paid_at=now(),paid_amount=$1,notes=COALESCE($2,notes),updated_at=now()
+          WHERE id=$3 AND organization_id=$4 RETURNING id,competence,amount,status,paid_at "paidAt",paid_amount "paidAmount",notes`, [paidAmount, optionalString(body, 'notes', { max: 1000 }), billingPaymentMatch[1], organizationId]);
+        if (!result.rowCount) throw notFound('Cobrança');
+        await pool.query(`INSERT INTO platform_audit_log(admin_user_id,organization_id,action,target_id,metadata) VALUES($1,$2,'billing_payment_registered',$3,$4)`, [session.userId, organizationId, billingPaymentMatch[1], JSON.stringify({ paidAmount })]);
+        return json(response, 200, result.rows[0]);
+      }
+
+      if (url.pathname === '/api/platform/tenants' && request.method === 'GET') {
+        const session = await auth(request, security, pool);
+        requirePlatformAdmin(session);
+        const search = url.searchParams.get('search') || '';
+        if (search.length > 120) throw new HttpError(400, 'Busca deve ter no máximo 120 caracteres', 'VALIDATION_ERROR');
+        const { rows } = await pool.query(`SELECT o.id,o.name,o.created_at "createdAt",COALESCE(s.plan,'manual') plan,
+          COALESCE(s.status,'active') status,s.monthly_fee "monthlyFee",s.billing_due_day "billingDueDay",s.trial_ends_at "trialEndsAt",
+          s.user_limit "userLimit",s.ai_requests_limit "aiRequestsLimit",s.ai_input_tokens_limit "aiInputTokensLimit",s.ai_output_tokens_limit "aiOutputTokensLimit",
+          (SELECT COUNT(*)::int FROM users u WHERE u.organization_id=o.id) "userCount"
+          FROM organizations o LEFT JOIN platform_tenant_settings s ON s.organization_id=o.id
+          WHERE ($1='' OR o.name ILIKE '%'||$1||'%') ORDER BY o.name,o.id`, [search]);
+        return json(response, 200, { tenants: rows });
+      }
+
+      if (url.pathname === '/api/platform/tenants' && request.method === 'POST') {
+        const session = await auth(request, security, pool);
+        requirePlatformAdmin(session);
+        const body = await parseBody(request);
+        const { name: _tenantName, ...settingsBody } = body;
+        const settings = readPlatformTenantSettings(settingsBody);
+        const name = requiredString(body, 'name', { max: 120, label: 'Tenant' });
+        const client = await pool.connect();
+        try {
+          await client.query('BEGIN');
+          const organization = await client.query('INSERT INTO organizations(name) VALUES($1) RETURNING id,name,created_at "createdAt"', [name]);
+          await client.query(`INSERT INTO platform_tenant_settings(organization_id,plan,monthly_fee,billing_due_day,trial_ends_at,user_limit,ai_requests_limit,ai_input_tokens_limit,ai_output_tokens_limit,updated_by)
+            VALUES($1,COALESCE($2,'manual'),COALESCE($3::numeric,0),$4,$5,$6,$7,$8,$9,$10)`, [organization.rows[0].id, settings.plan ?? null, settings.monthlyFee ?? null, settings.billingDueDay ?? null, settings.trialEndsAt ?? null, settings.userLimit ?? null, settings.aiRequestsLimit ?? null, settings.aiInputTokensLimit ?? null, settings.aiOutputTokensLimit ?? null, session.userId]);
+          await client.query(`INSERT INTO platform_audit_log(admin_user_id,organization_id,action,target_id) VALUES($1,$2,'tenant_create',$2)`, [session.userId, organization.rows[0].id]);
+          await client.query('COMMIT');
+          return json(response, 201, organization.rows[0]);
+        } catch (error) {
+          await client.query('ROLLBACK').catch(() => {});
+          throw error;
+        } finally { client.release(); }
+      }
+
+      const platformTenantMatch = url.pathname.match(/^\/api\/platform\/tenants\/([0-9a-f-]{36})$/i);
+      if (platformTenantMatch && ['PATCH', 'DELETE'].includes(request.method)) {
+        const session = await auth(request, security, pool);
+        requirePlatformAdmin(session);
+        const organizationId = platformTenantMatch[1];
+        if (request.method === 'DELETE') {
+          await pool.query(`INSERT INTO platform_audit_log(admin_user_id,organization_id,action,target_id)
+            VALUES($1,$2,'tenant_archive',$2)`, [session.userId, organizationId]);
+          const result = await pool.query(`INSERT INTO platform_tenant_settings(organization_id,status,updated_by)
+            VALUES($1,'archived',$2) ON CONFLICT (organization_id) DO UPDATE SET status='archived',updated_by=EXCLUDED.updated_by,updated_at=now()
+            RETURNING organization_id "organizationId",status`, [organizationId, session.userId]);
+          return json(response, 200, result.rows[0]);
+        }
+        const body = await parseBody(request);
+        const settings = readPlatformTenantSettings(body);
+        const fields = Object.keys(settings);
+        const values = [organizationId];
+        const assignments = [];
+        for (const field of fields) { values.push(settings[field]); assignments.push(`${field.replace(/[A-Z]/g, match => `_${match.toLowerCase()}`)}=$${values.length}`); }
+        if (!assignments.length) throw new HttpError(400, 'Nenhuma configuração enviada', 'VALIDATION_ERROR');
+        values.push(session.userId);
+        const result = await pool.query(`INSERT INTO platform_tenant_settings(organization_id,${assignments.map(value => value.split('=')[0]).join(',')},updated_by)
+          VALUES($1,${assignments.map((_, index) => `$${index + 2}`).join(',')},$${values.length})
+          ON CONFLICT (organization_id) DO UPDATE SET ${assignments.join(',')},updated_by=EXCLUDED.updated_by,updated_at=now()
+          RETURNING *`, values);
+        await pool.query(`INSERT INTO platform_audit_log(admin_user_id,organization_id,action,target_id,metadata) VALUES($1,$2,'tenant_update',$2,$3)`, [session.userId, organizationId, JSON.stringify(Object.keys(body))]);
+        return json(response, 200, result.rows[0]);
+      }
+
+      if (url.pathname === '/api/platform/dashboard-access' && request.method === 'POST') {
+        const session = await auth(request, security, pool);
+        requirePlatformAdmin(session);
+        const body = await parseBody(request);
+        const organizationId = requiredString(body, 'organizationId', { max: 36, label: 'Tenant' });
+        if (!/^[0-9a-f-]{36}$/i.test(organizationId)) throw new HttpError(400, 'Tenant inválido', 'VALIDATION_ERROR');
+        const tenant = await pool.query('SELECT id FROM organizations WHERE id=$1', [organizationId]);
+        if (!tenant.rowCount) throw notFound('Tenant');
+        const rawToken = randomBytes(32).toString('base64url');
+        const access = await pool.query(`INSERT INTO platform_access_sessions(token_hash,admin_user_id,organization_id,access_mode,expires_at) VALUES($1,$2,$3,'readonly',now()+interval '10 minutes') RETURNING id`, [hashPlatformToken(rawToken), session.userId, organizationId]);
+        await pool.query(`INSERT INTO platform_audit_log(admin_user_id,organization_id,action,target_id) VALUES($1,$2,'dashboard_access_issued',$2)`, [session.userId, organizationId]);
+        return json(response, 201, { accessId: access.rows[0].id, accessToken: rawToken, expiresInSeconds: 600 });
+      }
+
+      const revokeAccessMatch = url.pathname.match(/^\/api\/platform\/dashboard-access\/([0-9a-f-]{36})\/revoke$/i);
+      if (revokeAccessMatch && request.method === 'POST') {
+        const session = await auth(request, security, pool);
+        requirePlatformAdmin(session);
+        await pool.query('UPDATE platform_access_sessions SET revoked_at=now() WHERE id=$1 AND revoked_at IS NULL', [revokeAccessMatch[1]]);
+        await pool.query(`INSERT INTO platform_audit_log(admin_user_id,action,target_id) VALUES($1,'dashboard_access_revoked',$2)`, [session.userId, revokeAccessMatch[1]]);
+        return json(response, 200, { revoked: true });
       }
 
       if (url.pathname === '/api/auth/bootstrap' && request.method === 'POST') {
@@ -293,6 +679,23 @@ export function createRequestHandler({ pool, security, config }) {
 
       if (url.pathname === '/api/settings' && request.method === 'GET') {
         const session = await auth(request, security, pool);
+        if (session.platformAccess) {
+          const { rows } = await pool.query(`SELECT id "organizationId",name "organizationName"
+            FROM organizations WHERE id=$1`, [session.organizationId]);
+          if (!rows[0]) throw new HttpError(401, 'Tenant não disponível', 'UNAUTHORIZED');
+          return json(response, 200, {
+            profile: {
+              userId: session.userId,
+              name: session.name,
+              email: session.email,
+              organizationId: rows[0].organizationId,
+              organizationName: rows[0].organizationName,
+              role: session.role,
+              permissions: []
+            },
+            canEditOrganization: false
+          });
+        }
         const { rows } = await pool.query(`SELECT u.id "userId",u.name,u.email,o.id "organizationId",o.name "organizationName",r.name role,r.permissions
           FROM users u JOIN organizations o ON o.id=u.organization_id LEFT JOIN roles r ON r.id=u.role_id WHERE u.id=$1 AND u.organization_id=$2`, [session.userId, session.organizationId]);
         return json(response, 200, { profile: rows[0], canEditOrganization: session.permissions.includes('*') || session.permissions.includes('organization:write') });
@@ -333,6 +736,112 @@ export function createRequestHandler({ pool, security, config }) {
           await client.query('COMMIT');
           return json(response, 200, { revoked: true });
         } catch (error) { await client.query('ROLLBACK').catch(() => {}); throw error; } finally { client.release(); }
+      }
+
+      if (url.pathname === '/api/aurora/settings' && request.method === 'GET') {
+        const session = await auth(request, security, pool);
+        const { rows } = await pool.query('SELECT master_prompt "masterPrompt",tone,updated_at "updatedAt" FROM aurora_settings WHERE organization_id=$1', [session.organizationId]);
+        return json(response, 200, {
+          masterPrompt: rows[0]?.masterPrompt || AURORA_DEFAULT_PROMPT,
+          tone: rows[0]?.tone || 'amigavel',
+          canEdit: session.permissions.includes('*') || session.permissions.includes('ai:configuration'),
+          updatedAt: rows[0]?.updatedAt || null
+        });
+      }
+
+      if (url.pathname === '/api/aurora/knowledge' && request.method === 'GET') {
+        const session = await auth(request, security, pool);
+        if (!session.permissions.includes('*') && !session.permissions.includes('ai:suggestions') && !session.permissions.includes('ai:configuration')) {
+          throw new HttpError(403, 'Sem permissão para consultar a base de conhecimento', 'FORBIDDEN');
+        }
+        const { rows } = await pool.query(`SELECT id,title,type,content,active,updated_by "updatedBy",created_at "createdAt",updated_at "updatedAt"
+          FROM aurora_knowledge_base WHERE organization_id=$1 ORDER BY active DESC,updated_at DESC,id`, [session.organizationId]);
+        return json(response, 200, { items: rows });
+      }
+
+      const knowledgeId = routeId(url.pathname, 'aurora/knowledge');
+      if (knowledgeId && request.method === 'GET') {
+        const session = await auth(request, security, pool);
+        if (!session.permissions.includes('*') && !session.permissions.includes('ai:suggestions') && !session.permissions.includes('ai:configuration')) {
+          throw new HttpError(403, 'Sem permissão para consultar a base de conhecimento', 'FORBIDDEN');
+        }
+        const { rows } = await pool.query(`SELECT id,title,type,content,active,updated_by "updatedBy",created_at "createdAt",updated_at "updatedAt"
+          FROM aurora_knowledge_base WHERE id=$1 AND organization_id=$2`, [knowledgeId, session.organizationId]);
+        if (!rows[0]) throw new HttpError(404, 'Conteúdo não encontrado', 'NOT_FOUND');
+        return json(response, 200, rows[0]);
+      }
+
+      if (url.pathname === '/api/aurora/knowledge' && request.method === 'POST') {
+        const session = await auth(request, security, pool);
+        requirePermission(session, 'ai:configuration');
+        const fields = readAuroraKnowledge(await parseBody(request));
+        const { rows } = await pool.query(`INSERT INTO aurora_knowledge_base(organization_id,title,type,content,active,updated_by)
+          VALUES($1,$2,$3,$4,$5,$6)
+          RETURNING id,title,type,content,active,updated_by "updatedBy",created_at "createdAt",updated_at "updatedAt"`,
+        [session.organizationId, fields.title, fields.type, fields.content, fields.active ?? true, session.userId]);
+        return json(response, 201, rows[0]);
+      }
+
+      if (knowledgeId && request.method === 'PATCH') {
+        const session = await auth(request, security, pool);
+        requirePermission(session, 'ai:configuration');
+        const fields = readAuroraKnowledge(await parseBody(request), { partial: true });
+        const assignments = [];
+        const values = [];
+        for (const field of ['title', 'type', 'content', 'active']) {
+          if (fields[field] !== undefined) { values.push(fields[field]); assignments.push(`${field}=$${values.length}`); }
+        }
+        values.push(session.userId, knowledgeId, session.organizationId);
+        assignments.push(`updated_by=$${values.length - 2}`, 'updated_at=now()');
+        const { rows } = await pool.query(`UPDATE aurora_knowledge_base SET ${assignments.join(',')}
+          WHERE id=$${values.length - 1} AND organization_id=$${values.length}
+          RETURNING id,title,type,content,active,updated_by "updatedBy",created_at "createdAt",updated_at "updatedAt"`, values);
+        if (!rows[0]) throw new HttpError(404, 'Conteúdo não encontrado', 'NOT_FOUND');
+        return json(response, 200, rows[0]);
+      }
+
+      if (knowledgeId && request.method === 'DELETE') {
+        const session = await auth(request, security, pool);
+        requirePermission(session, 'ai:configuration');
+        const { rows } = await pool.query('DELETE FROM aurora_knowledge_base WHERE id=$1 AND organization_id=$2 RETURNING id', [knowledgeId, session.organizationId]);
+        if (!rows[0]) throw new HttpError(404, 'Conteúdo não encontrado', 'NOT_FOUND');
+        return json(response, 200, { deleted: true, id: rows[0].id });
+      }
+
+      if (url.pathname === '/api/aurora/settings' && request.method === 'PATCH') {
+        const session = await auth(request, security, pool);
+        requirePermission(session, 'ai:configuration');
+        const settings = readAuroraSettings(await parseBody(request));
+        const { rows } = await pool.query(`INSERT INTO aurora_settings(organization_id,master_prompt,tone,updated_by)
+          VALUES($1,$2,$3,$4)
+          ON CONFLICT (organization_id) DO UPDATE SET master_prompt=EXCLUDED.master_prompt,tone=EXCLUDED.tone,updated_by=EXCLUDED.updated_by,updated_at=now()
+          RETURNING master_prompt "masterPrompt",tone,updated_at "updatedAt"`, [session.organizationId, settings.masterPrompt, settings.tone, session.userId]);
+        return json(response, 200, { ...rows[0], canEdit: true });
+      }
+
+      if (url.pathname === '/api/aurora/test' && request.method === 'POST') {
+        const session = await auth(request, security, pool);
+        requirePermission(session, 'ai:suggestions');
+        if (!allowAiOrganization(`org:${session.organizationId}`) || !allowAiUser(`user:${session.userId}`)) {
+          throw new HttpError(429, 'Limite de sugestões atingido; tente novamente em instantes', 'AI_RATE_LIMITED');
+        }
+        const body = await parseBody(request);
+        requireKnownFields(body, ['message']);
+        const message = requiredString(body, 'message', { max: 2_000, label: 'Mensagem de teste' });
+        const { rows } = await pool.query('SELECT master_prompt "masterPrompt",tone FROM aurora_settings WHERE organization_id=$1', [session.organizationId]);
+        const knowledgeContext = await getRelevantAuroraKnowledge(pool, session.organizationId, message);
+        if (!aiProvider) throw new HttpError(503, 'Sugestões da Aurora indisponíveis', 'AI_NOT_CONFIGURED');
+        try {
+          const result = await suggestWithUsage({ request, pool, session, aiProvider, config, context: `client: ${message}`, knowledgeContext, masterPrompt: rows[0]?.masterPrompt || AURORA_DEFAULT_PROMPT, tone: rows[0]?.tone || 'amigavel', maxSuggestions: 1 });
+          const suggestions = Array.isArray(result?.suggestions) ? result.suggestions.map(value => limitSuggestion(value)).filter(Boolean).slice(0, 1) : [];
+          if (!suggestions.length) throw new Error('empty suggestions');
+          return json(response, 200, { suggestions });
+        } catch (error) {
+          if (error instanceof HttpError) throw error;
+          if (error?.code === 'AI_TIMEOUT') throw new HttpError(504, 'A Aurora demorou demais para responder', 'AI_TIMEOUT');
+          if (error?.code === 'AI_NOT_CONFIGURED') throw new HttpError(503, 'Sugestões da Aurora indisponíveis', 'AI_NOT_CONFIGURED');
+          throw new HttpError(502, 'Não foi possível gerar sugestões agora', 'AI_PROVIDER_ERROR');
+        }
       }
 
       if (url.pathname === '/api/organization' && request.method === 'PATCH') {
@@ -510,7 +1019,51 @@ export function createRequestHandler({ pool, security, config }) {
         if (!result.rowCount) throw notFound('Tag');
         return response.writeHead(204).end();
       }
+      // Indicadores reais do Dashboard
+      if (url.pathname === '/api/dashboard' && request.method === 'GET') {
+        const session = await auth(request, security, pool);
+        const organizationId = session.organizationId;
 
+        const [conversationsResult, leadsResult, negotiationResult, pipelineResult] =
+        await Promise.all([
+        pool.query(
+          `SELECT COUNT(*)::int AS total
+          FROM conversations
+          WHERE organization_id = $1 AND status = 'open'`,
+          [organizationId]
+        ),
+
+        pool.query(
+          `SELECT COUNT(*)::int AS total
+          FROM contacts
+          WHERE organization_id = $1
+           AND created_at >= NOW() - INTERVAL '7 days'`,
+          [organizationId]
+        ),
+
+        pool.query(
+          `SELECT COALESCE(SUM(value_cents), 0)::bigint AS total
+          FROM contacts
+          WHERE organization_id = $1 AND stage = $2`,
+          [organizationId, 'Negociação']
+        ),
+
+        pool.query(
+          `SELECT COALESCE(SUM(value_cents), 0)::bigint AS total
+          FROM contacts
+          WHERE organization_id = $1 AND stage = ANY($2::text[])`,
+          [organizationId, CONTACT_STAGES]
+        )
+      ]);
+
+      return json(response, 200, {
+        activeConversations: conversationsResult.rows[0].total,
+        newLeads7d: leadsResult.rows[0].total,
+        negotiationValueCents: Number(negotiationResult.rows[0].total),
+        pipelineValueCents: Number(pipelineResult.rows[0].total),
+        aiResolvedPercent: null
+      });
+      }
       if (url.pathname === '/api/contacts' && request.method === 'GET') {
         const session = await auth(request, security, pool);
         const page = Math.max(1, Number.parseInt(url.searchParams.get('page') || '1', 10) || 1);
@@ -554,6 +1107,7 @@ export function createRequestHandler({ pool, security, config }) {
         }
       }
       const contactId = routeId(url.pathname, 'contacts');
+      const contactImpactId = url.pathname.match(/^\/api\/contacts\/([^/]+)\/impact$/)?.[1] || null;
       if (contactId && request.method === 'GET') {
         const session = await auth(request, security, pool);
         const contact = await getContact(pool, contactId, session.organizationId);
@@ -596,16 +1150,49 @@ export function createRequestHandler({ pool, security, config }) {
         }
       }
 
+      if (contactImpactId && request.method === 'GET') {
+        const session = await auth(request, security, pool);
+        const contact = await getContact(pool, decodeURIComponent(contactImpactId), session.organizationId);
+        if (!contact) throw notFound('Contato');
+        const { rows } = await pool.query(`
+          SELECT
+            (SELECT COUNT(*)::int FROM conversations WHERE organization_id=$1 AND contact_id=$2) AS conversations,
+            (SELECT COUNT(*)::int FROM messages m JOIN conversations cv ON cv.id=m.conversation_id WHERE cv.organization_id=$1 AND cv.contact_id=$2) AS messages,
+            (SELECT COUNT(*)::int FROM contact_tags WHERE contact_id=$2) AS "tagAssociations"`, [session.organizationId, decodeURIComponent(contactImpactId)]);
+        return json(response, 200, {
+          conversations: rows[0].conversations,
+          messages: rows[0].messages,
+          tagAssociations: rows[0].tagAssociations
+        });
+      }
+
+      if (contactId && request.method === 'DELETE') {
+        const session = await auth(request, security, pool);
+        requirePermission(session, 'contacts:write');
+        const body = await parseBody(request);
+        const expectedVersion = requiredString(body, 'expectedVersion', { max: 32, label: 'Versão esperada' });
+        if (body.confirmCascade !== true) throw new HttpError(400, 'A confirmação da exclusão é obrigatória', 'CONFIRMATION_REQUIRED');
+        const deleted = await pool.query('DELETE FROM contacts WHERE id=$1 AND organization_id=$2 AND xmin::text=$3 RETURNING id', [contactId, session.organizationId, expectedVersion]);
+        if (!deleted.rowCount) {
+          const exists = await pool.query('SELECT 1 FROM contacts WHERE id=$1 AND organization_id=$2', [contactId, session.organizationId]);
+          if (!exists.rowCount) throw notFound('Contato');
+          throw new HttpError(409, 'O contato foi alterado por outro usuário; recarregue antes de excluir', 'STALE_WRITE');
+        }
+        return response.writeHead(204).end();
+      }
+
       if (url.pathname === '/api/conversations' && request.method === 'GET') {
         const session = await auth(request, security, pool);
         const limit = Math.min(100, Math.max(1, Number.parseInt(url.searchParams.get('limit') || '30', 10) || 30));
         const status = url.searchParams.get('status') || '';
+        const contactId = (url.searchParams.get('contactId') || '').trim();
         const search = (url.searchParams.get('q') || '').trim().slice(0, 120);
         const cursor = decodeCursor(url.searchParams.get('cursor'));
         if (status && !CONVERSATION_STATUSES.includes(status)) throw new HttpError(400, 'Estado da conversa inválido', 'VALIDATION_ERROR');
         const values = [session.organizationId];
         const where = ['cv.organization_id=$1'];
         if (status) { values.push(status); where.push(`cv.status=$${values.length}`); }
+        if (contactId) { values.push(contactId); where.push(`cv.contact_id=$${values.length}`); }
         if (search) { values.push(`%${search}%`); where.push(`(c.name ILIKE $${values.length} OR COALESCE(c.company,'') ILIKE $${values.length})`); }
         if (cursor) {
           values.push(cursor.timestamp, cursor.id);
@@ -695,6 +1282,38 @@ export function createRequestHandler({ pool, security, config }) {
           throw error;
         } finally {
           client.release();
+        }
+      }
+
+      const aiSuggestionsMatch = url.pathname.match(/^\/api\/conversations\/([^/]+)\/ai-suggestions$/);
+      if (aiSuggestionsMatch && request.method === 'POST') {
+        const session = await auth(request, security, pool);
+        requirePermission(session, 'ai:suggestions');
+        const conversationId = decodeURIComponent(aiSuggestionsMatch[1]);
+        if (!allowAiOrganization(`org:${session.organizationId}`) || !allowAiUser(`user:${session.userId}`)) {
+          throw new HttpError(429, 'Limite de sugestões atingido; tente novamente em instantes', 'AI_RATE_LIMITED');
+        }
+        const conversation = await getConversation(pool, conversationId, session.organizationId);
+        if (!conversation) throw notFound('Conversa');
+        const commercialTags = await getAuthorizedConversationTags(pool, conversationId, session.organizationId);
+        const { rows } = await pool.query(`${MESSAGE_SELECT} WHERE conversation_id=$1 ORDER BY sent_at DESC,id DESC LIMIT 20`, [conversationId]);
+        const contactStage = CONTACT_STAGES.includes(conversation.contactStage) ? conversation.contactStage : '';
+        const context = buildSuggestionContext(rows.reverse(), contactStage, commercialTags);
+        const lastInbound = rows.filter(message => message.direction === 'inbound').at(-1)?.body || '';
+        const knowledgeContext = await getRelevantAuroraKnowledge(pool, session.organizationId, lastInbound);
+        if (!aiProvider) throw new HttpError(503, 'Sugestões da Aurora indisponíveis', 'AI_NOT_CONFIGURED');
+        try {
+          const { rows: settings } = await pool.query('SELECT master_prompt "masterPrompt",tone FROM aurora_settings WHERE organization_id=$1', [session.organizationId]);
+          const result = await suggestWithUsage({ request, pool, session, aiProvider, config, context, knowledgeContext, masterPrompt: settings[0]?.masterPrompt || AURORA_DEFAULT_PROMPT, tone: settings[0]?.tone || 'amigavel' });
+          const suggestions = Array.isArray(result?.suggestions) ? result.suggestions.map(value => limitSuggestion(value)).filter(Boolean).slice(0, 2) : [];
+          if (!suggestions.length) throw new Error('empty suggestions');
+          return json(response, 200, { suggestions });
+        } catch (error) {
+          if (error instanceof HttpError) throw error;
+          if (error?.code === 'AI_RATE_LIMITED') throw new HttpError(429, 'O provedor de IA está temporariamente limitado', 'AI_RATE_LIMITED');
+          if (error?.code === 'AI_TIMEOUT') throw new HttpError(504, 'A Aurora demorou demais para responder', 'AI_TIMEOUT');
+          if (error?.code === 'AI_NOT_CONFIGURED') throw new HttpError(503, 'Sugestões da Aurora indisponíveis', 'AI_NOT_CONFIGURED');
+          throw new HttpError(502, 'Não foi possível gerar sugestões agora', 'AI_PROVIDER_ERROR');
         }
       }
 

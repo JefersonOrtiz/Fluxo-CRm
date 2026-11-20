@@ -1,0 +1,78 @@
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: jfcrm_preview
+      POSTGRES_USER: preview_user
+      POSTGRES_PASSWORD: preview_db_7f4b9c2e
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U preview_user -d jfcrm_preview"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+    tmpfs:
+      - /var/lib/postgresql/data
+    networks: [preview]
+
+  api:
+    image: node:22-bookworm-slim
+    working_dir: /app
+    command: ["node", "server.mjs"]
+    environment:
+      PORT: "3001"
+      DATABASE_URL: postgresql://preview_user:preview_db_7f4b9c2e@db:5432/jfcrm_preview
+      JWT_SECRET: preview_only_jwt_secret_8c6e2d1a4f7b9e3c
+      ENCRYPTION_KEY: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+      AI_PROVIDER: mock
+      OPENAI_ENABLED: "false"
+      OPENAI_API_KEY: ""
+      OPENAI_MODEL: gpt-4o-mini
+    volumes:
+      - ./backend/server.mjs:/app/server.mjs:ro
+      - ./backend/src:/app/src:ro
+      - ./backend/migrations:/app/migrations:ro
+      - ./backend/node_modules:/app/node_modules:ro
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3001/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+    networks: [preview]
+
+  seed:
+    image: node:22-bookworm-slim
+    working_dir: /app
+    command: ["node", "seed.mjs"]
+    environment:
+      DATABASE_URL: postgresql://preview_user:preview_db_7f4b9c2e@db:5432/jfcrm_preview
+    volumes:
+      - ./backend/node_modules:/app/node_modules:ro
+      - ./backend/src:/app/src:ro
+      - ./preview/seed.mjs:/app/seed.mjs:ro
+    depends_on:
+      api:
+        condition: service_healthy
+    networks: [preview]
+
+  nginx:
+    image: nginx:1.27-alpine
+    ports:
+      - "3000:80"
+    volumes:
+      - ./index.html:/usr/share/nginx/html/index.html:ro
+      - ./supreme-admin.html:/usr/share/nginx/html/supreme-admin.html:ro
+      - ./css:/usr/share/nginx/html/css:ro
+      - ./js:/usr/share/nginx/html/js:ro
+      - ./assets:/usr/share/nginx/html/assets:ro
+      - ./nginx/preview.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      api:
+        condition: service_healthy
+    networks: [preview]
+
+networks:
+  preview:
+    name: jfcrm-preview-net-20261119

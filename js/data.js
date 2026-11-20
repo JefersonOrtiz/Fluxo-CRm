@@ -41,6 +41,10 @@ let contacts=[
    {who:'me',text:'Paulo, segue o comparativo que pediu 📊',time:'12:02',st:'read'},
    {who:'c',text:'Ótimo. Apresento na diretoria quinta-feira.',time:'12:18',st:''}]}
 ];
+// No modo API, os contatos devem vir do PostgreSQL.
+if (window.FLUXO_CONFIG?.mode === 'api') {
+  contacts = [];
+}
 const byId=id=>contacts.find(c=>c.id===id);
 const initials=n=>n.split(' ').filter(w=>w.length>2).map(w=>w[0]).slice(0,2).join('').toUpperCase();
 const avaStyle=c=>`background:hsl(${c.hue} 42% 20%);color:hsl(${c.hue} 85% 72%);border:1px solid hsl(${c.hue} 50% 32%)`;
@@ -57,7 +61,10 @@ let events=[
  {d:off(4),t:'09:30',title:'Reunião de pipeline semanal',type:'reuniao',cid:''},
  {d:off(-2),t:'14:30',title:'Apresentação — Grupo Vetor',type:'reuniao',cid:'c8'}
 ];
-
+// No modo API, não utilizar eventos demonstrativos.
+if (window.FLUXO_CONFIG?.mode === 'api') {
+  events = [];
+}
 /* ═══════ POOLS ═══════ */
 const REPLIES=['Perfeito! 👍','Show, obrigado!','Consegue me passar mais detalhes?','Hmm, deixa eu ver aqui e já te retorno.','Fechou! 🤝','Pode me mandar isso por escrito?','Boa! E qual seria o prazo?','Ótimo, vou conversar com meu sócio e te aviso 😄'];
 const EMOJIS=['😀','😄','😂','🤝','👍','🙏','🔥','💚','🎯','📅','✅','⭐','🚀','💡','📌','🎉','😍','🤔','👀','💰','📦','☕','🌱','✨'];

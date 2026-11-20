@@ -2,7 +2,20 @@
   const shell = document.querySelector('#appShell');
   const rail = document.querySelector('.rail');
   if (!shell || !rail) return;
-  document.querySelector('#mobileNavToggle')?.addEventListener('click', () => shell.classList.toggle('mobile-nav-open'));
+  const mobileToggle = document.querySelector('#mobileNavToggle');
+  const setMobileMenu = open => {
+    shell.classList.toggle('mobile-nav-open', open);
+    mobileToggle?.setAttribute('aria-expanded', String(open));
+    mobileToggle?.setAttribute('aria-label', open ? 'Fechar menu' : 'Abrir menu');
+  };
+  mobileToggle?.addEventListener('click', event => { event.stopPropagation(); setMobileMenu(!shell.classList.contains('mobile-nav-open')); });
+  rail.addEventListener('click', event => {
+    if (event.target.closest('.rail-btn[data-view]')) setMobileMenu(false);
+  });
+  document.addEventListener('click', event => {
+    if (shell.classList.contains('mobile-nav-open') && !event.target.closest('.rail') && !event.target.closest('#mobileNavToggle')) setMobileMenu(false);
+  });
+  document.addEventListener('keydown', event => { if (event.key === 'Escape' && shell.classList.contains('mobile-nav-open')) setMobileMenu(false); });
   const toggle = document.createElement('button');
   toggle.className = 'rail-btn';
   toggle.type = 'button';

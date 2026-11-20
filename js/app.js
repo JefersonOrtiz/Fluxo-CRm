@@ -12,9 +12,22 @@ function switchView(v){
  document.querySelector('#appShell')?.classList.toggle('sidebar-collapsed',v==='chat');
  $$('.view').forEach(x=>x.classList.remove('active'));
  $('#view-'+v).classList.add('active');
+ const runtimeNotice=$('#runtimeNotice'), chatNotice=$('#chatApiNotice');
+ if(runtimeNotice) runtimeNotice.hidden = v==='chat';
+ if(chatNotice){
+  const api = apiConversationsMode();
+  chatNotice.hidden = !(v==='chat' && api);
+  chatNotice.textContent = api ? (runtimeNotice?.textContent || 'CRM conectado à API · sugestões da Aurora disponíveis · envio externo ainda não integrado') : '';
+ }
  $$('.rail-btn[data-view]').forEach(b=>b.classList.toggle('active',b.dataset.view===v));
  if(v==='chat'){if(apiConversationsMode())loadApiConversations();else scrollBottom()}
- if(v==='dashboard')runCounters();
+ if(v==='dashboard'){
+  if(window.FLUXO_CONFIG?.mode==='api'){
+    loadDashboardMetrics();
+  }else{
+    runCounters();
+  }
+ }
  if(v==='kanban')renderKanban();
  if(v==='calendar')renderCalendar();
  if(v==='contacts')renderContacts();
@@ -56,16 +69,95 @@ function updateUserIdentity(){
 }
 updateUserIdentity();
 window.addEventListener('fluxo:session',updateUserIdentity);
-
+window.addEventListener('fluxo:session', event => {
+  if (event.detail && activeView === 'dashboard') {
+    loadDashboardMetrics();
+  }
+});
 /* ═══════ DASHBOARD ═══════ */
-function runCounters(){$$('[data-n]').forEach(el=>{const tgt=parseFloat(el.dataset.n),dec=+(el.dataset.d||0),t0=performance.now();
- (function step(t){const p=Math.min(1,(t-t0)/900),e=1-Math.pow(1-p,3);el.textContent=(tgt*e).toFixed(dec).replace('.',',');if(p<1)requestAnimationFrame(step)})(t0)})}
-(function bars(){const vals=[46,62,54,70,66,58,74,80,71,88,84,96,90,104],mx=Math.max(...vals);let h='',lb='';
+let dashboardRequest = null;
+function runCounters() {
+  $$('[data-n]').forEach(el => {
+    const target = Number(el.dataset.n) || 0;
+    const decimals = Number(el.dataset.d) || 0;
+    const isMoney = el.id === 'dashNegotiationValue' || el.id === 'dashPipelineValue';
+    const start = performance.now();
+
+    function step(time) {
+      const progress = Math.min(1, (time - start) / 900);
+      const easing = 1 - Math.pow(1 - progress, 3);
+      const value = target * easing;
+
+      el.textContent = isMoney
+        ? new Intl.NumberFormat('pt-BR', {
+            style: 'currency',
+            currency: 'BRL'
+          }).format(value)
+        : value.toFixed(decimals).replace('.', ',');
+
+      if (progress < 1) requestAnimationFrame(step);
+    }
+
+    requestAnimationFrame(step);
+  });
+}
+function dashboardEmpty(text) {
+  const node = document.createElement('p');
+  node.className = 'dashboard-empty';
+  node.textContent = text;
+  return node;
+}
+function setDashboardEmpty(container, text) {
+  if (!container) return;
+  container.querySelectorAll(':scope > .dashboard-empty').forEach(el => el.remove());
+  container.append(dashboardEmpty(text));
+}
+function applyApiDashboardState(data) {
+  $$('#view-dashboard .kpi .kdelta, #view-dashboard .kpi .spark').forEach(el => { el.hidden = true; });
+  const ai = $('#dashAiResolved');
+  ai.textContent = data.aiResolvedPercent != null && Number.isFinite(Number(data.aiResolvedPercent)) ? `${data.aiResolvedPercent}%` : 'Indisponível';
+  const cards = $$('#view-dashboard .dash-row .card, #view-dashboard .dash-row2 .card');
+  if (cards[0]) { cards[0].querySelector('.bars')?.replaceChildren(dashboardEmpty('Histórico de mensagens indisponível.')); cards[0].querySelector('.blab')?.replaceChildren(); }
+  if (cards[1]) { cards[1].querySelectorAll('.ins').forEach(el => el.remove()); setDashboardEmpty(cards[1], 'Insights da Aurora ainda não estão disponíveis na API.'); }
+  if (cards[2]) { cards[2].querySelectorAll('.frow').forEach(el => el.remove()); setDashboardEmpty(cards[2], 'Nenhuma atividade recente disponível.'); }
+  if (cards[3]) { cards[3].querySelector('#hotLeads')?.replaceChildren(dashboardEmpty('Leads em aquecimento indisponíveis na API.')); }
+}
+function applyDashboardApiError(message) {
+  ['dashActiveConversations', 'dashNewLeads', 'dashNegotiationValue', 'dashPipelineValue'].forEach(id => { const el = $(`#${id}`); if (el) { el.textContent = '—'; el.dataset.n = '0'; } });
+  const ai = $('#dashAiResolved'); if (ai) ai.textContent = 'Indisponível';
+  const card = $('#view-dashboard .dash-row .card');
+  if (card) { card.querySelector('.bars')?.replaceChildren(dashboardEmpty(message)); card.querySelector('.blab')?.replaceChildren(); }
+}
+async function loadDashboardMetrics() {
+  if (window.FLUXO_CONFIG?.mode !== 'api') return;
+  if (!window.FluxoApi?.getSession()) return;
+  if (dashboardRequest) return dashboardRequest;
+  dashboardRequest = FluxoApi.request('/dashboard').then(data => {
+
+    const active = document.querySelector('#dashActiveConversations');
+    const leads = document.querySelector('#dashNewLeads');
+    const negotiation = document.querySelector('#dashNegotiationValue');
+    const pipeline = document.querySelector('#dashPipelineValue');
+    if (!active || !leads || !negotiation || !pipeline) return;
+
+    active.dataset.n = data.activeConversations;
+    leads.dataset.n = data.newLeads7d;
+    negotiation.dataset.n = Number(data.negotiationValueCents || 0) / 100;
+    pipeline.dataset.n = Number(data.pipelineValueCents || 0) / 100;
+    applyApiDashboardState(data);
+    runCounters();
+  }).catch(error => {
+    applyDashboardApiError(error?.status === 401 ? 'Sessão expirada. Entre novamente para carregar o Dashboard.' : 'Dados do Dashboard indisponíveis no momento.');
+    console.error('Erro ao carregar indicadores do Dashboard:', error);
+  }).finally(() => { dashboardRequest = null; });
+  return dashboardRequest;
+}
+(function bars(){if(window.FLUXO_CONFIG?.mode==='api')return;const vals=[46,62,54,70,66,58,74,80,71,88,84,96,90,104],mx=Math.max(...vals);let h='',lb='';
  vals.forEach((v,i)=>{const d=new Date();d.setDate(d.getDate()-(vals.length-1-i));
   h+=`<div class="bar ${i===vals.length-1?'hot':''}" style="height:${v/mx*100}%;--d:${i*45}ms" title="${d.getDate()}/${d.getMonth()+1} · ${v*7} mensagens"></div>`;
   lb+=`<span>${i%2?'':String(d.getDate()).padStart(2,'0')+'/'+String(d.getMonth()+1).padStart(2,'0')}</span>`});
  $('#bars').innerHTML=h;$('#blab').innerHTML=lb})();
-(function hot(){const hot3=[...contacts].sort((a,b)=>b.value-a.value).slice(0,4);
+(function hot(){if(window.FLUXO_CONFIG?.mode==='api'){return;}const hot3=[...contacts].sort((a,b)=>b.value-a.value).slice(0,4);
  $('#hotLeads').innerHTML=hot3.map((c,i)=>`<div class="frow" style="--d:${.5+i*.07}s;cursor:pointer" data-open-chat="${c.id}"><span class="cava" style="${avaStyle(c)};width:36px;height:36px;font-size:11px">${initials(c.name)}</span><div class="ftxt"><b>${c.name}</b> · ${c.company}<small style="display:block;color:var(--dim);font-size:11px">${c.stage}</small></div><span class="ftime" style="color:var(--jade)">${c.value?'R$ '+fmtK(c.value):'novo'}</span></div>`).join('')})();
 
 /* ═══════ CHAT — LISTA ═══════ */
@@ -126,11 +218,22 @@ function renderServiceWindow(contact=byId(activeId)){
  $('#windowLastMessage').hidden=status==='open'||openedAt===null; if(openedAt!==null){$('#windowOpenedAt').textContent=new Date(openedAt).toLocaleString('pt-BR',{dateStyle:'short',timeStyle:'short'});$('#windowOpenedAt').dateTime=new Date(openedAt).toISOString()}
  $('#windowHint').textContent=status==='open'?'Cada mensagem do cliente renova a janela por 24 horas.':status==='expired'?'Use um template aprovado para retomar o contato.':reason==='no-incoming-message'?'Nenhuma mensagem recebida do cliente.':'Horário indisponível';
 }
+function renderApiServiceWindow(conversation, messages = []) {
+ const contact = { msgs: messages.map(message => ({
+   who: message?.direction === 'inbound' ? 'c' : 'me',
+   sentAt: message?.sentAt
+ })) };
+ renderServiceWindow(contact);
+ const presence = $('#chPresence');
+ if (presence) presence.classList.remove('online');
+}
+window.renderApiServiceWindow = renderApiServiceWindow;
 function renderDetail(){const c=byId(activeId);
  $('#dAva').innerHTML=`<span class="cava" style="${avaStyle(c)};width:52px;height:52px;font-size:16px">${initials(c.name)}</span>`;
  $('#dName').textContent=c.name;$('#dComp').textContent=c.company;$('#dPhone').textContent=c.phone;$('#dMail').textContent=c.mail;
  $('#stageSel').value=c.stage;
  $('#tagBox').innerHTML=c.tags.map(t=>`<span class="tag">${esc(t)}</span>`).join('');
+ $('#dOrigin').innerHTML='🏷️ Origem: <b>WhatsApp · Campanha Setembro</b>';
  $('#notesBox').value=c.note||'';
  $('#favBtn').style.color=c.fav?'var(--gold)':'var(--dim)';
  updateSuggestions(c)}
@@ -139,7 +242,7 @@ function updateSuggestions(c){const last=[...c.msgs].reverse().find(m=>m.who!=='
 $('#suggBox').addEventListener('click',e=>{const b=e.target.closest('.sgt');if(b)sendMessage(b.textContent)});
 
 function openChat(id){if(apiConversationsMode())return openApiConversation(id);activeId=id;const c=byId(id);c.unread=0;markRead(c);
- renderChatList();renderConvHead();renderMessages();renderDetail();railBadge()}
+ renderChatList();renderConvHead();renderMessages();renderDetail();syncDetailPanel(false);railBadge()}
 
 /* envio */
 const inp=$('#composerInput'),sendBtn=$('#sendBtn');
@@ -178,20 +281,68 @@ $('#emojiPop').addEventListener('click',e=>{const b=e.target.closest('button');i
 document.addEventListener('click',e=>{if(!e.target.closest('#emojiPop')&&!e.target.closest('#emojiBtn'))$('#emojiPop').classList.remove('open')});
 
 /* header / painel de detalhes */
+let detailPanelOpen = false;
+function hasValidConversationContext() {
+  return apiConversationsMode() ? Boolean(apiConversationState.active && apiConversationState.contact) : Boolean(byId(activeId));
+}
+function syncDetailPanel(open = detailPanelOpen) {
+  const shell = $('#chatShell');
+ const trigger = $('#clientDetailsToggle') || $('#convContactTrigger');
+  const valid = hasValidConversationContext();
+  detailPanelOpen = Boolean(open && valid);
+  if (innerWidth > 1350) {
+    shell.classList.toggle('no-detail', !detailPanelOpen);
+    shell.classList.remove('show-detail');
+  } else {
+    shell.classList.toggle('show-detail', detailPanelOpen);
+    shell.classList.remove('no-detail');
+  }
+ const pane = $('#detailPane');
+ const backdrop = $('#detailBackdrop');
+ if (pane) pane.hidden = !detailPanelOpen;
+ if (backdrop) backdrop.hidden = !detailPanelOpen;
+ if(!trigger)return;
+ trigger.classList.toggle('is-open', detailPanelOpen);
+  trigger.classList.toggle('is-disabled', !valid);
+  trigger.setAttribute('aria-expanded', String(detailPanelOpen));
+  trigger.setAttribute('aria-disabled', String(!valid));
+  trigger.tabIndex = valid ? 0 : -1;
+  trigger.title = valid ? (detailPanelOpen ? 'Ocultar detalhes do cliente' : 'Mostrar detalhes do cliente') : 'Detalhes indisponíveis sem conversa selecionada';
+}
+window.syncDetailPanel = syncDetailPanel;
+function renderConversationPresence(online){
+ const el=$('#presenceStatus'); if(!el)return;
+ const known=typeof online==='boolean';
+ el.className='presence-status '+(known?(online?'online':'offline'):'unavailable');
+ el.textContent=known?(online?'● Online':'● Offline'):'● Indisponível';
+ el.setAttribute('aria-label',known?(online?'Status de presença: online':'Status de presença: offline'):'Status de presença indisponível');
+ el.title=el.getAttribute('aria-label');
+}
+function renderConversationWindowStatus(conversation, messages=[]){
+ const el=$('#windowStatus'); if(!el)return;
+ let text='◷ Janela 24h indisponível', state='unavailable';
+ if(String(conversation?.channel||'').toLowerCase().includes('whatsapp')){
+  const inbound=messages.filter(m=>m?.direction==='inbound'&&m.sentAt).sort((a,b)=>new Date(b.sentAt)-new Date(a.sentAt))[0];
+  if(inbound){const date=new Date(inbound.sentAt), now=new Date(); const same=date.toDateString()===now.toDateString(); const time=date.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'}); const when=same?`às ${time}`:`em ${date.toLocaleDateString('pt-BR')} às ${time}`; const open=Date.now()-date.getTime()<86400000; state=open?'open':'expired'; text=open?`◷ Janela 24h aberta · Iniciada ${when}`:`◷ Janela 24h expirada · Última msg. do cliente ${when}`;}}
+ el.className='window-status '+state; el.textContent=text; el.hidden=false;
+}
+window.renderConversationPresence=renderConversationPresence;
+window.renderConversationWindowStatus=renderConversationWindowStatus;
 $('#aiSwitch').onclick=()=>{if(apiConversationsMode()){toast('✦','Aurora indisponível','A IA ainda não está integrada às conversas persistidas.','gold');return}const c=byId(activeId);c.aiOn=!c.aiOn;$('#aiSwitch').classList.toggle('on',c.aiOn);
  toast(c.aiOn?'✦':'⏸️','Aurora',c.aiOn?'IA ativada nesta conversa — respostas automáticas ligadas.':'IA pausada — você assume o atendimento.',c.aiOn?'gold':'')};
 function setClientDetails(open,restoreFocus=true){const sh=$('#chatShell');if(innerWidth>1350)sh.classList.toggle('no-detail',!open);else sh.classList.toggle('show-detail',open);$('#detailPane').hidden=!open;$('#detailBackdrop').hidden=!open;$('#clientDetailsToggle').setAttribute('aria-expanded',String(open));$('#clientDetailsToggle').setAttribute('aria-label',`${open?'Fechar':'Abrir'} detalhes do cliente`);if(restoreFocus)(open?$('#closeClientDetails'):$('#clientDetailsToggle')).focus({preventScroll:true})}
 function toggleClientDetails(){const open=innerWidth>1350?!$('#chatShell').classList.contains('no-detail'):$('#chatShell').classList.contains('show-detail');setClientDetails(!open)}
 $('#clientDetailsToggle').onclick=toggleClientDetails;$('#serviceWindow').onclick=toggleClientDetails;
 $('#closeClientDetails').onclick=()=>setClientDetails(false);$('#detailBackdrop').onclick=()=>setClientDetails(false);
+syncDetailPanel(false);
 $$('[data-back]').forEach(b=>b.onclick=()=>$('#chatShell').classList.remove('conv-open'));
 document.addEventListener('keydown',event=>{if(event.key==='Escape'&&!$('#detailPane').hidden)setClientDetails(false)});
 $('#stageSel').innerHTML=STAGES.map(s=>`<option>${s}</option>`).join('');
-$('#stageSel').onchange=e=>{if(apiConversationsMode())return updateActiveApiContactStage(e.target.value);const c=byId(activeId);c.stage=e.target.value;renderKanban();toast('🎯','Funil atualizado',`${c.name} agora está em “${c.stage}”.`)};
-$('#tagInput').addEventListener('keydown',e=>{if(apiConversationsMode())return;if(e.key==='Enter'&&e.target.value.trim()){byId(activeId).tags.push(e.target.value.trim());e.target.value='';renderDetail();toast('🏷','Tag adicionada','Salva no perfil do cliente.')}});
-$('#notesBox').addEventListener('change',e=>{if(apiConversationsMode())return;byId(activeId).note=e.target.value;toast('📝','Nota salva','Anotação vinculada ao contato.')});
-$('#favBtn').onclick=()=>{if(apiConversationsMode())return;const c=byId(activeId);c.fav=!c.fav;renderDetail();renderChatList()};
-$$('.qact').forEach(b=>b.onclick=()=>{const c=byId(activeId),a=b.dataset.act;
+$('#stageSel').onchange=e=>{if(!hasValidConversationContext())return;if(apiConversationsMode())return updateActiveApiContactStage(e.target.value);const c=byId(activeId);c.stage=e.target.value;renderKanban();toast('🎯','Funil atualizado',`${c.name} agora está em “${c.stage}”.`)};
+$('#tagInput').addEventListener('keydown',e=>{if(apiConversationsMode()||!hasValidConversationContext())return;if(e.key==='Enter'&&e.target.value.trim()){byId(activeId).tags.push(e.target.value.trim());e.target.value='';renderDetail();toast('🏷','Tag adicionada','Salva no perfil do cliente.')}});
+$('#notesBox').addEventListener('change',e=>{if(apiConversationsMode()||!hasValidConversationContext())return;byId(activeId).note=e.target.value;toast('📝','Nota salva','Anotação vinculada ao contato.')});
+$('#favBtn').onclick=()=>{if(apiConversationsMode()||!hasValidConversationContext())return;const c=byId(activeId);c.fav=!c.fav;renderDetail();renderChatList()};
+$$('.qact').forEach(b=>b.onclick=()=>{if(!hasValidConversationContext())return;const c=byId(activeId),a=b.dataset.act;
  if(apiConversationsMode()){if(a==='handoff')assignActiveApiConversation();else toast('💡','Ação demonstrativa','Esta ação ainda não está integrada à API.','gold');return}
  if(a==='task')toast('✅','Tarefa criada',`Follow-up com ${c.name} amanhã às 9h.`);
  if(a==='calendar'){openModal('event');$('#evContact').value=c.id;$('#evTitle').value='Follow-up — '+c.name}
@@ -255,9 +406,8 @@ function renderContacts(){if(apiContactsMode())return renderApiContacts();const 
   <td><span class="stbadge" style="background:${STBG[c.stage]};color:${SCOLOR[c.stage]}">${c.stage}</span></td>
   <td class="mono" style="color:var(--jade);font-weight:600">${c.value?'R$ '+fmtK(c.value):'—'}</td>
   <td>${c.tags.slice(0,2).map(t=>`<span class="tag" style="margin-right:4px">${esc(t)}</span>`).join('')}</td>
-  <td><span class="ia-dot" style="background:${c.aiOn?'var(--gold)':'var(--dim)'}"></span>${c.aiOn?'Aurora on':'manual'}</td></tr>`).join('')}
+  <td><span class="ia-dot" style="background:${c.aiOn?'var(--gold)':'var(--dim)'}"></span>${c.aiOn?'Aurora on':'manual'}</td></tr>`).join(''); renderContactActions()}
 $('#ctSearch').addEventListener('input',()=>{if(!apiContactsMode())renderContacts()});
-$('#ctBody').addEventListener('click',e=>{const tr=e.target.closest('tr');if(tr){if(apiContactsMode())openModal('contact',tr.dataset.id);else{openChat(tr.dataset.id);switchView('chat')}}});
 
 /* ═══════ VIEW DA IA ═══════ */
 let kbs=['site-fluxo.pdf','tabela-precos.xlsx','faq-atendimento','politica-de-trocas'];
@@ -266,6 +416,7 @@ renderKB();
 $('#kbBox').addEventListener('click',e=>{const b=e.target.closest('[data-kb]');if(b){kbs.splice(b.dataset.kb,1);renderKB();toast('🗑','Documento removido','Aurora não usará mais essa fonte.','coral')}});
 $('#kbAdd').onclick=()=>{const v=$('#kbInput').value.trim();if(!v)return;kbs.push(v);$('#kbInput').value='';renderKB();toast('📚','Base atualizada','A Aurora será retreinada com esse documento.','gold')};
 $('#pgBtn').onclick=()=>{const v=$('#pgInput').value.trim();if(!v)return;
+ if(apiConversationsMode())return;
  $('#pgBox').insertAdjacentHTML('beforeend',`<div class="msg me" style="margin-left:auto"><p>${esc(v)}</p></div>`);
  $('#pgInput').value='';$('#pgBox').scrollTop=1e5;
  setTimeout(()=>{$('#pgBox').insertAdjacentHTML('beforeend',`<div class="msg them" style="max-width:85%"><span class="ai-tag">✦ AURORA</span><p>${esc(kbReply(v))}</p></div>`);$('#pgBox').scrollTop=1e5},700)};
@@ -311,6 +462,9 @@ setInterval(()=>{if(apiConversationsMode())return;if(Math.random()<.55){const c=
 if(!apiConversationsMode())setTimeout(()=>{pushIncoming(byId('c4'),'Consegue me enviar ainda hoje? 🙏')},6000);
 
 /* ═══════ INIT ═══════ */
-renderChatList();if(!apiConversationsMode())openChat('c1');renderKanban();renderCalendar();renderContacts();runCounters();railBadge();
-if(innerWidth<=1350)$('#chatShell').classList.add('no-detail');
+const contactCreateButton = document.querySelector('#view-contacts [data-open-contact]');
+if (contactCreateButton) { contactCreateButton.textContent = '＋ Novo cliente'; contactCreateButton.setAttribute('aria-label', 'Novo cliente'); }
+const demoPipelineValue = document.querySelector('#dashPipelineValue');
+if (demoPipelineValue && window.FLUXO_CONFIG?.mode !== 'api') demoPipelineValue.dataset.n = contacts.reduce((sum, contact) => sum + Number(contact.value || 0), 0);
+renderChatList();if(!apiConversationsMode())openChat('c1');renderKanban();renderCalendar();renderContacts();if(window.FLUXO_CONFIG?.mode==='api'){applyApiDashboardState({aiResolvedPercent:null});loadDashboardMetrics();}else runCounters();railBadge();
 if(window.FLUXO_CONFIG?.mode!=='api')toast('✦',`Bem-vinda ao Fluxo, ${getFluxoUserName()}!`,'A Aurora está online em modo demonstrativo.','gold');
