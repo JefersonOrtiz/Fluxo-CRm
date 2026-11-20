@@ -42,7 +42,9 @@ Não apague registros dessa tabela nem edite migrations aplicadas. Em caso de fa
 
 ## Painel Supremo e acesso de plataforma
 
-A migration `0007_platform_admin_and_tenant_control.sql` cria o marcador global `users.is_platform_admin`, inicialmente `false` para todos, além das tabelas de configuração de tenants, auditoria e sessões temporárias.
+A migration `0007_platform_admin_and_tenant_control.sql` cria o marcador global `users.is_platform_admin`, inicialmente `false` para todos, além das tabelas de configuração de tenants, auditoria e sessões temporárias. A migration `0009_platform_access_readonly.sql` explicita `access_mode=readonly` nessas sessões.
+
+O acesso pelo botão Dashboard é somente leitura. O backend rejeita rotas de plataforma e qualquer método diferente de `GET`/`HEAD` quando o cabeçalho `X-Platform-Access-Token` está presente. Não use esse fluxo para editar dados do Tenant; o Super Admin deve voltar à sua sessão normal para administrar a plataforma.
 
 Nenhum cadastro, bootstrap ou login promove um usuário automaticamente. A designação inicial deve ser feita manualmente, após confirmação administrativa, identificando o UUID exato:
 

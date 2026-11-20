@@ -164,13 +164,25 @@ const hashPlatformToken = token => createHash('sha256').update(token).digest();
 const auth = async (request, security, pool) => {
   const platformToken = request.headers['x-platform-access-token'];
   if (typeof platformToken === 'string' && platformToken.length >= 32) {
-    const { rows } = await pool.query(`SELECT u.id,u.organization_id,u.name,u.session_version,u.is_platform_admin,
-      r.name role_name,r.permissions,s.organization_id access_organization_id
+    const { rows } = await pool.query(`SELECT u.id,u.organization_id,u.name,u.email,u.session_version,u.is_platform_admin,
+      r.name role_name,r.permissions,s.organization_id access_organization_id,s.access_mode
       FROM platform_access_sessions s JOIN users u ON u.id=s.admin_user_id
       JOIN roles r ON r.id=u.role_id AND r.organization_id=u.organization_id
       WHERE s.token_hash=$1 AND s.revoked_at IS NULL AND s.expires_at>now() AND u.active=true AND u.is_platform_admin=true`, [hashPlatformToken(platformToken)]);
     if (!rows[0]) throw new HttpError(401, 'Acesso administrativo temporário inválido ou expirado', 'UNAUTHORIZED');
-    return { ...platformUserPayload({ ...rows[0], organization_id: rows[0].access_organization_id }), platformAccess: true };
+    if (rows[0].access_mode !== 'readonly') throw new HttpError(401, 'Modo de acesso administrativo inválido', 'UNAUTHORIZED');
+    return {
+      userId: rows[0].id,
+      organizationId: rows[0].access_organization_id,
+      name: rows[0].name,
+      email: rows[0].email,
+      role: 'Visualização administrativa',
+      permissions: [],
+      sessionVersion: rows[0].session_version,
+      isPlatformAdmin: false,
+      platformAccess: true,
+      platformAccessMode: rows[0].access_mode
+    };
   }
   const token = security.readToken(request);
 
@@ -204,6 +216,12 @@ const auth = async (request, security, pool) => {
 
 const requirePlatformAdmin = session => {
   if (!session.isPlatformAdmin || session.platformAccess) throw new HttpError(403, 'Acesso reservado ao Super Admin', 'PLATFORM_ADMIN_REQUIRED');
+};
+
+// A sessão emitida para visualizar um Tenant nunca pode virar uma sessão de escrita.
+// O guard fica no backend e não depende do método HTTP usado pelo frontend.
+const rejectTemporaryWrites = session => {
+  if (session.platformAccess) throw new HttpError(403, 'Acesso temporário é somente leitura', 'PLATFORM_READONLY');
 };
 
 const readPlatformTenantSettings = body => {
@@ -414,6 +432,13 @@ export function createRequestHandler({ pool, security, config, aiProvider }) {
         return json(response, 200, { ok: true, service: 'fluxo-api' });
       }
 
+      if (request.headers['x-platform-access-token']) {
+        const temporarySession = await auth(request, security, pool);
+        if (temporarySession.platformAccess && (url.pathname.startsWith('/api/platform') || !['GET', 'HEAD'].includes(request.method))) {
+          rejectTemporaryWrites(temporarySession);
+        }
+      }
+
       const platformRead = async () => {
         const session = await auth(request, security, pool);
         requirePlatformAdmin(session);
@@ -583,7 +608,7 @@ export function createRequestHandler({ pool, security, config, aiProvider }) {
         const tenant = await pool.query('SELECT id FROM organizations WHERE id=$1', [organizationId]);
         if (!tenant.rowCount) throw notFound('Tenant');
         const rawToken = randomBytes(32).toString('base64url');
-        const access = await pool.query(`INSERT INTO platform_access_sessions(token_hash,admin_user_id,organization_id,expires_at) VALUES($1,$2,$3,now()+interval '10 minutes') RETURNING id`, [hashPlatformToken(rawToken), session.userId, organizationId]);
+        const access = await pool.query(`INSERT INTO platform_access_sessions(token_hash,admin_user_id,organization_id,access_mode,expires_at) VALUES($1,$2,$3,'readonly',now()+interval '10 minutes') RETURNING id`, [hashPlatformToken(rawToken), session.userId, organizationId]);
         await pool.query(`INSERT INTO platform_audit_log(admin_user_id,organization_id,action,target_id) VALUES($1,$2,'dashboard_access_issued',$2)`, [session.userId, organizationId]);
         return json(response, 201, { accessId: access.rows[0].id, accessToken: rawToken, expiresInSeconds: 600 });
       }
@@ -650,6 +675,23 @@ export function createRequestHandler({ pool, security, config, aiProvider }) {
 
       if (url.pathname === '/api/settings' && request.method === 'GET') {
         const session = await auth(request, security, pool);
+        if (session.platformAccess) {
+          const { rows } = await pool.query(`SELECT id "organizationId",name "organizationName"
+            FROM organizations WHERE id=$1`, [session.organizationId]);
+          if (!rows[0]) throw new HttpError(401, 'Tenant não disponível', 'UNAUTHORIZED');
+          return json(response, 200, {
+            profile: {
+              userId: session.userId,
+              name: session.name,
+              email: session.email,
+              organizationId: rows[0].organizationId,
+              organizationName: rows[0].organizationName,
+              role: session.role,
+              permissions: []
+            },
+            canEditOrganization: false
+          });
+        }
         const { rows } = await pool.query(`SELECT u.id "userId",u.name,u.email,o.id "organizationId",o.name "organizationName",r.name role,r.permissions
           FROM users u JOIN organizations o ON o.id=u.organization_id LEFT JOIN roles r ON r.id=u.role_id WHERE u.id=$1 AND u.organization_id=$2`, [session.userId, session.organizationId]);
         return json(response, 200, { profile: rows[0], canEditOrganization: session.permissions.includes('*') || session.permissions.includes('organization:write') });

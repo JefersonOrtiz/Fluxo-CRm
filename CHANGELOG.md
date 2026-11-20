@@ -58,6 +58,8 @@ O projeto segue o formato do Keep a Changelog enquanto não possui versões publ
 
 - Compose passa a exigir segredos locais explícitos para JWT e criptografia.
 - Artefato do GitHub Pages passa a conter apenas os arquivos necessários à demonstração.
+- Sessões temporárias do Painel Supremo passaram a ser explicitamente `readonly`,
+  com bloqueio central de escritas e de rotas globais no backend.
 
 ## Histórico anterior
 
