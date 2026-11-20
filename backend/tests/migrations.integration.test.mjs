@@ -15,7 +15,8 @@ const expectedMigrations = [
   '0004_aurora_settings.sql',
   '0005_aurora_knowledge_base.sql',
   '0006_ai_usage_and_quotas.sql',
-  '0007_platform_admin_and_tenant_control.sql'
+  '0007_platform_admin_and_tenant_control.sql',
+  '0008_platform_tenant_operations.sql'
 ];
 
 const identitySql = 'SELECT current_database() AS database, current_user AS user, inet_server_addr() AS address, inet_server_port() AS port';
