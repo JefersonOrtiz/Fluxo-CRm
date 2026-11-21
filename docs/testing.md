@@ -2,7 +2,7 @@
 
 ## Estado atual
 
-O repositório possui testes automatizados do cliente HTTP e um teste de integração de organização, contatos, funil, conversas, mensagens e agenda contra PostgreSQL real. Ainda não possui testes de navegador, lint ou pipeline de CI.
+O repositório possui testes automatizados do cliente HTTP, testes unitários e de endpoint da API, validação de migrations contra PostgreSQL descartável e um teste de integração de organização, contatos, funil, conversas, mensagens e agenda contra PostgreSQL real. Ainda não possui testes de navegador nem lint dedicado.
 
 ```bash
 npm test
@@ -23,6 +23,16 @@ docker compose exec -T \
 Ele cria organizações com identificadores aleatórios, testa isolamento, permissões, referências cruzadas, contatos, cursores, idempotência, atribuição, agenda UTC/fuso, sobreposições e conflitos de versão, e remove as organizações no encerramento. Nunca habilite a flag contra uma base que não seja destinada a testes.
 
 Para validar uma migration contra schema anterior, use somente uma base descartável: remova nela as alterações correspondentes, apague apenas o registro da migration testada e reinicie a API. Confirme o schema resultante e descarte o volume. Nunca execute esse procedimento destrutivo em uma base compartilhada.
+
+## CI no GitHub Actions
+
+O workflow `.github/workflows/ci.yml` executa em push e em Pull Requests direcionados à branch `migracao-postgresql`. Ele usa Node.js 24, instala as dependências com `npm ci` e cria somente um PostgreSQL 16 temporário do runner.
+
+O banco de CI é limitado a `127.0.0.1:55432/jfcrm_migrations_etapa21`. A suíte rejeita hosts, portas e bancos diferentes, incluindo Railway, staging e produção. O teste de migrations recria o schema desse banco descartável e valida a sequência completa de `0000` até `0010`.
+
+O workflow mantém `AI_PROVIDER=mock` e `OPENAI_ENABLED=false`. Não define credenciais de OpenAI, Anthropic ou Meta e não realiza chamadas a provedores externos.
+
+Para verificar o resultado, abra o repositório no GitHub, selecione a aba **Actions**, abra a execução **CI** referente ao commit ou Pull Request e consulte o job **Validate application and migrations**. Uma etapa com falha encerra o job com status de falha. Para tornar esse status obrigatório antes do merge, configure a proteção da branch `migracao-postgresql` para exigir o check `Validate application and migrations`.
 
 ## Smoke tests mínimos
 
@@ -61,4 +71,4 @@ Depois do bootstrap, valide login, `/api/auth/me` e ao menos uma rota protegida.
 
 ## Critério para CI
 
-O pipeline deverá falhar em instalação não reproduzível, lint, testes, migrations, divergência do OpenAPI, segredo detectado ou smoke test malsucedido.
+O pipeline falha em instalação não reproduzível, verificações de sintaxe, testes ou migrations. A validação de OpenAPI, detecção de segredos e smoke tests adicionais continuam como próximas etapas do CI.

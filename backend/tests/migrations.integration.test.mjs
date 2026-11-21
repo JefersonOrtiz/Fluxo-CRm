@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { Pool } from 'pg';
 import { runMigrations } from '../src/migrations.mjs';
-import { validateMigrationTestTarget } from './migration-target.unit.mjs';
+import { validateConnectedMigrationTestTarget, validateMigrationTestTarget } from './migration-target.unit.mjs';
 
 const migrationTarget = validateMigrationTestTarget({ allowed: process.env.MIGRATIONS_TEST_ALLOWED, databaseUrl: process.env.DATABASE_URL });
 const initialSchema = await readFile(new URL('../../database/init.sql', import.meta.url), 'utf8');
@@ -16,7 +16,9 @@ const expectedMigrations = [
   '0005_aurora_knowledge_base.sql',
   '0006_ai_usage_and_quotas.sql',
   '0007_platform_admin_and_tenant_control.sql',
-  '0008_platform_tenant_operations.sql'
+  '0008_platform_tenant_operations.sql',
+  '0009_platform_access_readonly.sql',
+  '0010_aurora_multi_provider_byok.sql'
 ];
 
 const identitySql = 'SELECT current_database() AS database, current_user AS user, inet_server_addr() AS address, inet_server_port() AS port';
@@ -28,9 +30,7 @@ const createGuardedPool = rawPool => ({
     const verify = async () => {
       const result = await rawClient.query(identitySql);
       const row = result.rows[0];
-      if (row.database !== migrationTarget.database || String(row.port) !== migrationTarget.port || row.address !== migrationTarget.hostname) {
-        throw new Error('destino PostgreSQL conectado não corresponde ao alvo autorizado');
-      }
+      validateConnectedMigrationTestTarget({ target: migrationTarget, identity: row });
       verified = true;
     };
     return {
