@@ -366,6 +366,31 @@ paths:
   /api/tags/{id}:
     parameters:
       - $ref: '#/components/parameters/ResourceId'
+    patch:
+      tags: [Organization]
+      summary: Atualiza nome ou cor de uma tag
+      description: Exige `organization:write` ou `*`; a tag é sempre limitada à organização autenticada.
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              minProperties: 1
+              properties:
+                name: { type: string, maxLength: 60 }
+                color: { type: string, enum: [jade, sky, gold, orange, coral, purple] }
+      responses:
+        '200':
+          description: Tag atualizada
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Tag' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
     delete:
       tags: [Organization]
       summary: Exclui uma tag

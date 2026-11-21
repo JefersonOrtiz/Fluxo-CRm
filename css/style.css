@@ -8,6 +8,8 @@
   --gold:#ffc24b;--gold-t:rgba(255,194,75,.12);
   --coral:#ff7d6e;--coral-t:rgba(255,125,110,.13);
   --sky:#5ec8ff;--sky-t:rgba(94,200,255,.13);
+  --orange:#ff9f43;--orange-t:rgba(255,159,67,.14);
+  --purple:#c59bff;--purple-t:rgba(197,155,255,.14);
   --r:14px;--shadow:0 14px 38px rgba(0,0,0,.4);
 }
 html,body{height:100%}
@@ -258,7 +260,7 @@ select.inp,textarea.inp,input.inp{width:100%;background:var(--bg2);border:1px so
 select.inp:focus,textarea.inp:focus,input.inp:focus{border-color:rgba(49,227,162,.45)}
 textarea.inp{resize:vertical;min-height:64px}
 .tagbox{display:flex;flex-wrap:wrap;gap:6px}
-.tag{font-size:11px;font-weight:600;background:var(--sky-t);color:var(--sky);padding:4px 11px;border-radius:999px}
+.tag{font-size:11px;font-weight:600;background:var(--sky-t);color:var(--sky);padding:4px 11px;border-radius:999px}.tag.jade{background:var(--jade-t);color:var(--jade)}.tag.sky{background:var(--sky-t);color:var(--sky)}.tag.gold{background:var(--gold-t);color:var(--gold)}.tag.orange{background:var(--orange-t);color:var(--orange)}.tag.coral{background:var(--coral-t);color:var(--coral)}.tag.purple{background:var(--purple-t);color:var(--purple)}
 .sgt{display:block;width:100%;text-align:left;background:var(--gold-t);border:1px solid rgba(255,194,75,.24);color:#ffd98a;padding:9.5px 12px;border-radius:10px;font-size:12.5px;line-height:1.4;cursor:pointer;transition:.16s;margin-bottom:8px}
 .sgt:hover{background:rgba(255,194,75,.2);transform:translateX(3px)}
 .qacts{display:grid;grid-template-columns:1fr 1fr;gap:8px}
@@ -395,7 +397,17 @@ tbody tr:last-child td{border:none}
 @media(max-width:1350px){.chat-shell{grid-template-columns:320px 1fr}.detail-pane{position:absolute;right:0;top:0;bottom:0;width:318px;z-index:35;box-shadow:var(--shadow);display:none}
 .chat-shell.show-detail .detail-pane{display:block}.chat-shell{position:relative}.chat-shell.show-detail .detail-backdrop{display:block;position:absolute;inset:0;background:rgba(0,0,0,.45);z-index:34}
 .compact-form{max-width:390px}.compact-form .inp{flex:1;min-width:0;width:auto}.compact-form .btn{flex:none;padding:9px 12px;white-space:nowrap}
+#view-admin #adminDepartmentList{margin-top:16px}
+#view-admin #memberForm > .btn{grid-column:2;align-self:end}
+#view-admin .tag-form{max-width:none;align-items:center;flex-wrap:wrap}
+#view-admin .tag-form .inp{min-width:150px}
+.tag-color-picker{display:flex;align-items:center;gap:5px}
+.tag-color-option{width:24px;height:24px;border-radius:50%;border:2px solid transparent;box-shadow:0 0 0 1px var(--line2);flex:none}
+.tag-color-option[aria-pressed="true"]{border-color:var(--txt);box-shadow:0 0 0 2px var(--bg1),0 0 0 3px var(--txt)}
+.tag-color-option.jade{background:var(--jade)}.tag-color-option.sky{background:var(--sky)}.tag-color-option.gold{background:var(--gold)}.tag-color-option.orange{background:var(--orange)}.tag-color-option.coral{background:var(--coral)}.tag-color-option.purple{background:var(--purple)}
+.tag-form #tagColorPreview{min-width:64px;text-align:center}
 @media(max-width:1100px){.kpis{grid-template-columns:1fr 1fr}.dash-row,.dash-row2,.ai-wrap,.cal-wrap,.manage-grid,.org-layout,.admin-grid{grid-template-columns:1fr}}
+@media(max-width:680px){#view-admin #memberForm > .btn{grid-column:1}.tag-color-picker{order:3}.tag-form #tagColorPreview{order:4}.tag-form #tagSubmit{order:5}}
 @media(max-width:820px){.chat-shell{grid-template-columns:1fr}.conv-pane{display:none}
 .chat-shell.conv-open .conv-pane{display:flex;position:absolute;inset:0;z-index:32;background:var(--bg0)}
 .chat-shell{position:relative}.back-btn{display:grid}.msg{max-width:82%}.runtime-notice{max-width:calc(100vw - 24px);white-space:normal;text-align:center}.auth-card{padding:22px}.conv-head{gap:7px;padding:9px 10px}.client-heading{gap:6px;min-width:0;max-width:calc(100vw - 150px)}.service-window{min-width:0;max-width:145px}.service-window-hint{white-space:normal;overflow:hidden;text-overflow:ellipsis}.service-window-last-message{display:none}.contact-presence{font-size:10px}.conv-head .ai-switch{padding:5px 7px;font-size:10px}.conv-head>.icon-btn{width:30px;height:30px}.ch-info b{font-size:16px}.client-header .ch-info > b{font-size:16px}.service-window-state,.service-window-state b{font-size:11px}.service-window-hint{font-size:11px}}
@@ -518,4 +530,24 @@ tbody tr:last-child td{border:none}
   scrollbar-width: thin;
   scrollbar-color: var(--line2) transparent;
   }
+}
+/* Ações administrativas e de conta mantêm dimensões compactas sem alterar os demais botões. */
+#view-admin .btn,
+#view-settings .btn{
+  width:auto;
+  min-width:0;
+  height:42px;
+  padding:0 18px;
+  justify-self:start;
+  flex:0 0 auto;
+  white-space:nowrap;
+}
+#view-admin .compact-form .btn{padding-left:18px;padding-right:18px}
+#view-admin #roleForm > div{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+#view-admin #roleForm > div .btn{justify-content:center}
+#view-admin .role-item button{min-width:40px;min-height:40px;padding:8px 10px}
+#view-settings .form-grid > .btn{align-self:start}
+@media(max-width:520px){
+  #view-admin .btn,
+  #view-settings .btn{max-width:100%;overflow:hidden;text-overflow:ellipsis}
 }

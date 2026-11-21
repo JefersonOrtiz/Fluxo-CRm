@@ -143,7 +143,10 @@ function renderApiConversationDetails() {
   $('#dOrigin').innerHTML = `🏷️ Canal: <b>${esc(conversation.channel || '—')}</b>`;
   $('#stageSel').value = contact.stage;
   $('#stageSel').disabled = !conversationCan('contacts:write');
-  $('#tagBox').innerHTML = contact.tags.map(tag => `<span class="tag">${esc(tag.name)}</span>`).join('') || '—';
+  $('#tagBox').innerHTML = contact.tags.map(tag => {
+    const color = window.FluxoTagColor?.(tag.color) || 'sky';
+    return `<span class="tag ${color}">${esc(tag.name)}</span>`;
+  }).join('') || '—';
   $('#tagInput').disabled = true;
   $('#tagInput').placeholder = 'Edite tags no cadastro do contato';
   $('#notesBox').disabled = true;
