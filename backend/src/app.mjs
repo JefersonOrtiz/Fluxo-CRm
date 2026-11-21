@@ -20,6 +20,7 @@ const CONTACT_STAGES = Object.freeze(['Novo lead', 'Qualificação', 'Proposta',
 const AI_COMMERCIAL_TAGS = new Set(['interesse-produto', 'origem-campanha', 'prioridade', 'segmento-comercial', 'intenção-demo']);
 const AURORA_TONES = new Set(['formal', 'amigavel', 'descontraido']);
 const AURORA_KNOWLEDGE_TYPES = new Set(['text', 'faq']);
+const TAG_COLORS = new Set(['jade', 'sky', 'gold', 'orange', 'coral', 'purple']);
 const AURORA_DEFAULT_PROMPT = 'Você é a Aurora, assistente virtual comercial. Seja útil, clara e cordial, sem inventar informações comerciais.';
 const CONTACT_SORTS = Object.freeze({
   updatedAt: 'c.updated_at',
@@ -1008,10 +1009,30 @@ export function createRequestHandler({ pool, security, config, aiProvider }) {
         const body = await parseBody(request);
         const name = requiredString(body, 'name', { max: 60, label: 'Nome' });
         const color = optionalString(body, 'color', { max: 24, label: 'Cor' }) || 'sky';
+        if (!TAG_COLORS.has(color)) throw new HttpError(400, 'Cor inválida', 'VALIDATION_ERROR');
         const { rows } = await pool.query('INSERT INTO tags(organization_id,name,color) VALUES($1,$2,$3) RETURNING id,name,color', [session.organizationId, name, color]);
         return json(response, 201, rows[0]);
       }
       const tagId = routeId(url.pathname, 'tags');
+      if (tagId && request.method === 'PATCH') {
+        const session = await auth(request, security, pool);
+        requirePermission(session, 'organization:write');
+        const body = await parseBody(request);
+        const updates = [];
+        const values = [];
+        const add = (column, value) => { values.push(value); updates.push(`${column}=$${values.length}`); };
+        if (body.name !== undefined) add('name', requiredString(body, 'name', { max: 60, label: 'Nome' }));
+        if (body.color !== undefined) {
+          const color = optionalString(body, 'color', { max: 24, label: 'Cor' }) || 'sky';
+          if (!TAG_COLORS.has(color)) throw new HttpError(400, 'Cor inválida', 'VALIDATION_ERROR');
+          add('color', color);
+        }
+        if (!updates.length) throw new HttpError(400, 'Nenhum campo editável enviado', 'VALIDATION_ERROR');
+        values.push(tagId, session.organizationId);
+        const { rows } = await pool.query(`UPDATE tags SET ${updates.join(',')} WHERE id=$${values.length - 1} AND organization_id=$${values.length} RETURNING id,name,color`, values);
+        if (!rows[0]) throw notFound('Tag');
+        return json(response, 200, rows[0]);
+      }
       if (tagId && request.method === 'DELETE') {
         const session = await auth(request, security, pool);
         requirePermission(session, 'organization:write');

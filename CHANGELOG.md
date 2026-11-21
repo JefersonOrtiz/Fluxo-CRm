@@ -6,6 +6,8 @@ O projeto segue o formato do Keep a Changelog enquanto não possui versões publ
 
 ### Adicionado
 
+- Paleta acessível e edição de cores de tags de clientes, com atualização isolada por organização e ajustes responsivos na Administração.
+
 - Tela de configurações com edição de perfil, troca de senha com revogação global de sessões e organização protegida por permissão.
 
 - Governança, instruções de contribuição e política de segurança.
@@ -38,6 +40,8 @@ O projeto segue o formato do Keep a Changelog enquanto não possui versões publ
 - Validação estrutural do baseline de migrations, com testes para bancos novos, consolidados e incompletos.
 
 ### Alterado
+
+- Botões das páginas Administração e Configurações padronizados em dimensões compactas e responsivas, sem alterar campos ou funcionalidades.
 
 - Painel Supremo reorganizado em layout administrativo denso, com navegação, indicadores, filtros, lista de Tenants e detalhamento responsivo.
 - Acesso do Super Admin ao Dashboard do Tenant passou a usar sessão temporária em `sessionStorage`, sem token em URL, e a mensalidade do Painel passou a aceitar e exibir o formato monetário brasileiro.

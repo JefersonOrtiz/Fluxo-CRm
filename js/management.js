@@ -41,6 +41,11 @@ const loadDemoManagement = () => {
 
 let management = apiMode() ? emptyManagement() : loadDemoManagement();
 let editingRoleId = null;
+let editingTagId = null;
+const TAG_COLORS = Object.freeze(['jade', 'sky', 'gold', 'orange', 'coral', 'purple']);
+const tagColor = value => TAG_COLORS.includes(value) ? value : 'sky';
+window.FluxoTagColor = tagColor;
+window.FluxoTagLookup = name => management.tags.find(tag => tag.name === name);
 const saveManagement = () => { if (!apiMode()) localStorage.setItem(MANAGEMENT_KEY, JSON.stringify(management)); };
 const managementId = prefix => `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2, 6)}`;
 const depById = id => management.departments.find(item => item.id === id);
@@ -116,7 +121,7 @@ function renderAdmin() {
     const permissions = (item.permissions || []).map(permission => permissionLabels[permission] || permission).join(', ') || 'Sem permissões administrativas';
     return `<div class="role-item"><b>${esc(item.name)}</b><small>${esc(item.description || '')}</small><small>${esc(permissions)}</small>${can('roles:write') ? `<span style="margin-left:auto;display:flex;gap:5px"><button data-edit-role="${item.id}" title="Editar">Editar</button><button data-remove-role="${item.id}" title="Excluir">×</button></span>` : ''}</div>`;
   }).join('');
-  $('#adminTagList').innerHTML = management.tags.map(tag => `<span class="tag">${esc(tag.name)} ${can('organization:write') ? `<button data-remove-tag="${tag.id}" title="Excluir">×</button>` : ''}</span>`).join('');
+  $('#adminTagList').innerHTML = management.tags.map(tag => `<span class="tag ${tagColor(tag.color)}">${esc(tag.name)} ${can('organization:write') ? `<button data-edit-tag="${tag.id}" title="Alterar cor" aria-label="Alterar cor de ${esc(tag.name)}">✎</button><button data-remove-tag="${tag.id}" title="Excluir" aria-label="Excluir ${esc(tag.name)}">×</button>` : ''}</span>`).join('');
   setFormEnabled($('#departmentForm'), can('organization:write'));
   setFormEnabled($('#tagForm'), can('organization:write'));
   setFormEnabled($('#memberForm'), can('members:write'));
@@ -126,6 +131,15 @@ function renderAdmin() {
   $('#roleAdminWarning').hidden = !editing || !roleHasWildcard(editing.permissions);
   $('#roleCancel').hidden = !editing;
   $('#roleSubmit').textContent = editing ? 'Salvar alterações' : 'Adicionar privilégio';
+  const editingTag = editingTagId ? management.tags.find(tag => tag.id === editingTagId) : null;
+  $('#adminTagName').value = editingTag?.name || '';
+  $('#tagSubmit').textContent = editingTag ? 'Salvar cor' : 'Adicionar';
+  const selectedTagColor = tagColor(editingTag?.color || $('#tagForm')?.dataset.color || 'sky');
+  $('#tagForm').dataset.color = selectedTagColor;
+  $$('[data-tag-color]').forEach(button => button.setAttribute('aria-pressed', String(button.dataset.tagColor === selectedTagColor)));
+  const preview = $('#tagColorPreview');
+  preview.className = `tag ${selectedTagColor}`;
+  preview.textContent = editingTag?.name || 'Prévia';
 }
 
 const roleHasWildcard = permissions => Array.isArray(permissions) && permissions.includes('*');
@@ -282,24 +296,46 @@ $('#roleCancel').onclick = cancelRoleEdit;
 $('#tagForm').addEventListener('submit', async event => {
   event.preventDefault();
   const input = $('#adminTagName'), name = input.value.trim();
-  if (!name || management.tags.some(tag => tag.name === name)) return;
+  const color = tagColor(event.target.dataset.color || 'sky');
+  const wasEditing = !!editingTagId;
+  if (!name || management.tags.some(tag => tag.name === name && tag.id !== editingTagId)) return;
   try {
-    const tag = apiMode()
-      ? await FluxoApi.request('/tags', { method: 'POST', body: { name, color: 'sky' } })
-      : { id: managementId('tag'), name, color: 'sky' };
-    management.tags.push(tag);
+    if (editingTagId) {
+      const tag = apiMode()
+        ? await FluxoApi.request(`/tags/${encodeURIComponent(editingTagId)}`, { method: 'PATCH', body: { color } })
+        : { ...management.tags.find(item => item.id === editingTagId), color };
+      management.tags = management.tags.map(item => item.id === editingTagId ? tag : item);
+      editingTagId = null;
+    } else {
+      const tag = apiMode()
+        ? await FluxoApi.request('/tags', { method: 'POST', body: { name, color } })
+        : { id: managementId('tag'), name, color };
+      management.tags.push(tag);
+    }
     input.value = '';
     saveManagement(); renderAdmin();
-    toast('✓', 'Tag criada', `${name} foi adicionada.`);
+    toast('✓', wasEditing ? 'Tag atualizada' : 'Tag criada', `${name} está disponível.`);
   } catch (error) { actionError(error, 'Não foi possível criar a tag.'); }
 });
+
+$$('[data-tag-color]').forEach(button => button.addEventListener('click', () => {
+  const color = tagColor(button.dataset.tagColor);
+  $('#tagForm').dataset.color = color;
+  $$('[data-tag-color]').forEach(item => item.setAttribute('aria-pressed', String(item === button)));
+  const preview = $('#tagColorPreview');
+  preview.className = `tag ${color}`;
+  preview.textContent = $('#adminTagName').value.trim() || 'Prévia';
+}));
+$('#adminTagName').addEventListener('input', event => { $('#tagColorPreview').textContent = event.target.value.trim() || 'Prévia'; });
 
 $('#view-admin').addEventListener('click', async event => {
   const departmentButton = event.target.closest('[data-remove-department]');
   const editRoleButton = event.target.closest('[data-edit-role]');
   const roleButton = event.target.closest('[data-remove-role]');
+  const editTagButton = event.target.closest('[data-edit-tag]');
   const tagButton = event.target.closest('[data-remove-tag]');
   if (editRoleButton) return beginRoleEdit(editRoleButton.dataset.editRole);
+  if (editTagButton) { editingTagId = editTagButton.dataset.editTag; renderAdmin(); $('#adminTagName').focus(); return; }
   if (!departmentButton && !roleButton && !tagButton) return;
   try {
     if (departmentButton) {

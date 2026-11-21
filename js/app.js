@@ -232,7 +232,7 @@ function renderDetail(){const c=byId(activeId);
  $('#dAva').innerHTML=`<span class="cava" style="${avaStyle(c)};width:52px;height:52px;font-size:16px">${initials(c.name)}</span>`;
  $('#dName').textContent=c.name;$('#dComp').textContent=c.company;$('#dPhone').textContent=c.phone;$('#dMail').textContent=c.mail;
  $('#stageSel').value=c.stage;
- $('#tagBox').innerHTML=c.tags.map(t=>`<span class="tag">${esc(t)}</span>`).join('');
+ $('#tagBox').innerHTML=c.tags.map(t=>{const color=window.FluxoTagColor?.(window.FluxoTagLookup?.(t)?.color)||'sky';return `<span class="tag ${color}">${esc(t)}</span>`}).join('');
  $('#dOrigin').innerHTML='🏷️ Origem: <b>WhatsApp · Campanha Setembro</b>';
  $('#notesBox').value=c.note||'';
  $('#favBtn').style.color=c.fav?'var(--gold)':'var(--dim)';
@@ -405,7 +405,7 @@ function renderContacts(){if(apiContactsMode())return renderApiContacts();const 
   <td class="mono" style="font-size:12px;color:var(--mut)">${c.phone}</td>
   <td><span class="stbadge" style="background:${STBG[c.stage]};color:${SCOLOR[c.stage]}">${c.stage}</span></td>
   <td class="mono" style="color:var(--jade);font-weight:600">${c.value?'R$ '+fmtK(c.value):'—'}</td>
-  <td>${c.tags.slice(0,2).map(t=>`<span class="tag" style="margin-right:4px">${esc(t)}</span>`).join('')}</td>
+  <td>${c.tags.slice(0,2).map(t=>{const color=window.FluxoTagColor?.(window.FluxoTagLookup?.(t)?.color)||'sky';return `<span class="tag ${color}" style="margin-right:4px">${esc(t)}</span>`}).join('')}</td>
   <td><span class="ia-dot" style="background:${c.aiOn?'var(--gold)':'var(--dim)'}"></span>${c.aiOn?'Aurora on':'manual'}</td></tr>`).join(''); renderContactActions()}
 $('#ctSearch').addEventListener('input',()=>{if(!apiContactsMode())renderContacts()});
 

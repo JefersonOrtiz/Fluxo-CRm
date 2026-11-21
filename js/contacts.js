@@ -12,6 +12,12 @@ const contactCanWrite = () => {
 const contactHue = id => [...String(id)].reduce((total, char) => total + char.charCodeAt(0), 0) % 360;
 const contactUi = item => ({ ...item, mail: item.email || '', value: item.valueCents / 100, hue: contactHue(item.id), tags: item.tags || [], days: 0 });
 const contactMoney = cents => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format((cents || 0) / 100);
+const renderTag = tag => {
+  const item = typeof tag === 'string' ? window.FluxoTagLookup?.(tag) : tag;
+  const name = typeof tag === 'string' ? tag : tag?.name;
+  const color = window.FluxoTagColor?.(item?.color || tag?.color) || 'sky';
+  return `<span class="tag ${color}" style="margin-right:4px">${esc(name || '')}</span>`;
+};
 const contactError = (error, fallback) => {
   const stale = error?.details?.code === 'STALE_WRITE';
   toast('⚠️', stale ? 'Contato alterado por outra pessoa' : 'Contato não atualizado', stale ? 'Os dados foram recarregados. Revise antes de tentar novamente.' : error?.message || fallback, 'coral');
@@ -54,7 +60,7 @@ function renderApiContacts() {
     <td class="mono" style="font-size:12px;color:var(--mut)">${esc(contact.phone || '—')}</td>
     <td><span class="stbadge" style="background:${STBG[contact.stage]};color:${SCOLOR[contact.stage]}">${esc(contact.stage)}</span></td>
     <td class="mono" style="color:var(--jade);font-weight:600">${contactMoney(contact.valueCents)}</td>
-    <td>${contact.tags.slice(0, 3).map(tag => `<span class="tag" style="margin-right:4px">${esc(tag.name)}</span>`).join('') || '—'}</td>
+    <td>${contact.tags.slice(0, 3).map(renderTag).join('') || '—'}</td>
     <td><span class="ia-dot" style="background:var(--dim)"></span>não integrada</td></tr>`).join('') || '<tr><td colspan="6" class="empty-state">Nenhum contato encontrado.</td></tr>';
   renderContactActions();
   const page = contactListState.pageInfo;
