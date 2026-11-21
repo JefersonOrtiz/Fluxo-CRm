@@ -52,6 +52,7 @@ O projeto segue o formato do Keep a Changelog enquanto não possui versões publ
 
 ### Corrigido
 
+- Validação das migrations no GitHub Actions agora reconhece a tradução segura de porta entre o runner e o PostgreSQL descartável, sem permitir destinos externos ou não autorizados.
 - Serviço da página inicial no servidor SQLite legado.
 - Caminho do webhook Meta exibido na interface.
 - Carregamento opcional de `backend/.env` no desenvolvimento standalone.
