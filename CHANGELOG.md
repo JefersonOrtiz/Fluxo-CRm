@@ -6,6 +6,8 @@ O projeto segue o formato do Keep a Changelog enquanto não possui versões publ
 
 ### Adicionado
 
+- Workflow GitHub Actions para validações de sintaxe, testes seguros e migrations PostgreSQL descartáveis de `0000` a `0010` na branch `migracao-postgresql`.
+
 - Tela de configurações com edição de perfil, troca de senha com revogação global de sessões e organização protegida por permissão.
 
 - Governança, instruções de contribuição e política de segurança.

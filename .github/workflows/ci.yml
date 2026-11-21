@@ -1,0 +1,75 @@
+name: CI
+
+on:
+  push:
+    branches: [migracao-postgresql]
+  pull_request:
+    branches: [migracao-postgresql]
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: Validate application and migrations
+    runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: postgresql://tester:ci_password_only@127.0.0.1:55432/jfcrm_migrations_etapa21
+      MIGRATIONS_TEST_ALLOWED: 'true'
+      JWT_SECRET: ci_only_jwt_secret_with_at_least_32_characters
+      ENCRYPTION_KEY: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+      CORS_ORIGIN: http://localhost:8080
+      AI_PROVIDER: mock
+      OPENAI_ENABLED: 'false'
+      NODE_ENV: test
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: tester
+          POSTGRES_PASSWORD: ci_password_only
+          POSTGRES_DB: jfcrm_migrations_etapa21
+        ports:
+          - 55432:5432
+        options: >-
+          --health-cmd "pg_isready -U tester -d jfcrm_migrations_etapa21"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24.x
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            backend/package-lock.json
+
+      - name: Install root dependencies from lockfile
+        run: npm ci
+
+      - name: Install API dependencies from lockfile
+        run: npm --prefix backend ci
+
+      - name: Run syntax checks and frontend tests
+        run: npm run check
+
+      - name: Run safe API unit and endpoint tests
+        shell: bash
+        run: |
+          mapfile -t tests < <(
+            find backend/tests -maxdepth 1 -type f -name '*.mjs' \
+              ! -name 'migrations.integration.test.mjs' \
+              ! -name 'organization.integration.test.mjs' \
+              -print | sort
+          )
+          node --test --test-concurrency=1 "${tests[@]}"
+
+      - name: Run PostgreSQL migration integration tests
+        run: node --test --test-concurrency=1 backend/tests/migrations.integration.test.mjs
